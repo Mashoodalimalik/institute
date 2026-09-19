@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, BellCheck, BellOff, Sparkles, Check } from 'lucide-react';
+import { Bell, BellRing, BellOff, Sparkles, Check } from 'lucide-react';
 import vapidKeysJson from '@/lib/vapid-keys.json';
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -144,7 +144,7 @@ export default function NotificationBell() {
           title="Web Push Notifications Enabled (Click to disable)"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25 text-xs font-semibold transition-all shadow-sm"
         >
-          <BellCheck size={14} className="text-emerald-400" />
+          <BellRing size={14} className="text-emerald-400" />
           <span className="hidden sm:inline">Push Active</span>
           <Check size={12} className="text-emerald-400" />
         </button>

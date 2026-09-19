@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       if (student.parent.web_push_sub) {
         const title = punchType === 'check_in' ? '✅ Student Checked IN' : '🚪 Student Checked OUT';
         notificationResults.web_push = await sendWebPush(student.parent.web_push_sub, {
-          title: `${title} — ${settings.instituteName || 'Okasha Institute'}`,
+          title: `${title} — ${settings.institute_name || 'Okasha Institute'}`,
           body: `${student.full_name} has ${punchType === 'check_in' ? 'arrived at' : 'left'} the institute.`,
           url: '/attendance',
         });

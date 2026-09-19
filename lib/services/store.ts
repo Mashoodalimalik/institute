@@ -382,7 +382,7 @@ export const demoStore = {
 
   // ─── Get all class names ─────────────────────────────────────
   getUniqueClasses(): string[] {
-    return [...new Set(DEMO_STUDENTS.map(s => s.class_name).filter(Boolean) as string[])].sort();
+    return Array.from(new Set(DEMO_STUDENTS.map(s => s.class_name).filter(Boolean) as string[])).sort();
   },
 
   // ─── Add new parent ──────────────────────────────────────────
@@ -425,6 +425,11 @@ export const demoStore = {
   // ─── Get all parents ─────────────────────────────────────────
   async getParents(): Promise<Profile[]> {
     return [...DEMO_PARENTS];
+  },
+
+  // ─── Get single parent by ID ─────────────────────────────────
+  getParent(parentId?: string): Profile | undefined {
+    return DEMO_PARENTS.find(p => p.id === parentId);
   },
 };
 
