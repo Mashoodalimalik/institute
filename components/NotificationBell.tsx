@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Bell, BellRing, BellOff, Sparkles, Check } from 'lucide-react';
-import vapidKeysJson from '@/lib/vapid-keys.json';
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -69,7 +68,8 @@ export default function NotificationBell() {
 
       // Public VAPID Key
       const vapidPublicKey =
-        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || vapidKeysJson.publicKey;
+        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) throw new Error('Push notifications are not configured');
 
       const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
 
@@ -84,7 +84,6 @@ export default function NotificationBell() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subscription: subscription.toJSON(),
-          userId: 'parent-001', // Demo parent profile
         }),
       });
 

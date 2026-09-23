@@ -161,13 +161,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', userId)
+      .eq('auth_user_id', userId)
       .single();
 
     if (error || !data) return null;
 
     const childrenResult = data.role === 'parent'
-      ? await supabase.from('profiles').select('id').eq('parent_id', userId)
+      ? await supabase.from('profiles').select('id').eq('parent_id', data.id)
       : null;
 
     return {
@@ -220,11 +220,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (mounted) setIsLoading(false);
 
       // Listen for auth changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, authSession) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, authSession) => {
         if (!mounted) return;
         if (authSession?.user) {
-          const profile = await fetchProfile(authSession.user.id);
-          setSession(profile);
+          // Do not await Supabase calls while its auth lock is held.
+          setTimeout(() => {
+            if (!mounted) return;
+            fetchProfile(authSession.user.id).then(profile => {
+              if (mounted) { setSession(profile); setIsLoading(false); }
+            }).catch(() => { if (mounted) { setSession(null); setIsLoading(false); } });
+          }, 0);
         } else {
           setSession(null);
         }
@@ -234,12 +239,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return () => { mounted = false; subscription.unsubscribe(); };
     };
 
-    const cleanup = initAuth();
+    const cleanup = initAuth().catch(() => { if (mounted) setIsLoading(false); });
     return () => { mounted = false; cleanup.then(fn => fn?.())};
   }, [fetchProfile]);
 
   // Demo login (localStorage)
   const login = useCallback((s: UserSession) => {
+    if (IS_SUPABASE_LIVE) return;
     saveDemoSession(s);
     setSession(s);
   }, []);

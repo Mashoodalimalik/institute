@@ -18,7 +18,7 @@ export default function MyFeesPage() {
   const [loading, setLoading] = useState(true);
 
   // For students: use profileId. For parents: show first child (demo simplification)
-  const profileId = session?.profileId ?? (session?.childrenIds?.[0] ?? '');
+  const profileId = session?.role === 'parent' ? (session.childrenIds?.[0] ?? '') : (session?.profileId ?? '');
 
   const loadData = useCallback(async () => {
     if (!profileId) { setLoading(false); return; }
@@ -136,7 +136,7 @@ export default function MyFeesPage() {
                             <CheckCircle size={18} className="text-emerald-400" />
                           </div>
                           <div className="flex-1">
-                            <div className="text-sm font-semibold text-white">{r.receipt_number}</div>
+                            <a href={`/api/receipts/pdf?id=${r.id}`} className="text-sm font-semibold text-brand-300">{r.receipt_number} · Download</a>
                             <div className="text-xs text-slate-500 mt-0.5">
                               {new Date(r.created_at).toLocaleDateString('en-PK', {
                                 year: 'numeric', month: 'long', day: 'numeric'

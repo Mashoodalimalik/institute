@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { demoStore } from '@/lib/services/store';
+import { serverStore as demoStore } from '@/lib/services/server-store';
 import { BiometricPushPayload } from '@/lib/types';
+import { createServiceClient } from '@/lib/supabase/server';
 import { sendWhatsApp, sendSMS, sendWebPush, buildAttendanceAlertMessage } from '@/lib/services/notifications';
 
 export const runtime = 'nodejs';
@@ -17,11 +18,11 @@ export async function POST(req: NextRequest) {
 
     // ── 1. Authenticate device secret ─────────────────────────────
     const expectedSecret = process.env.DEVICE_WEBHOOK_SECRET;
-    if (expectedSecret && secret !== expectedSecret) {
+    if (!expectedSecret || secret !== expectedSecret) {
       return NextResponse.json({ error: 'Unauthorized — invalid device secret' }, { status: 401 });
     }
 
-    if (!user_id || !timestamp) {
+    if (typeof user_id !== 'string' || !user_id || typeof timestamp !== 'string' || !/(Z|[+-]\d{2}:\d{2})$/.test(timestamp) || !Number.isFinite(Date.parse(timestamp)) || Date.parse(timestamp) > Date.now() + 300000) {
       return NextResponse.json({ error: 'Missing required fields: user_id, timestamp' }, { status: 400 });
     }
 
@@ -35,23 +36,20 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 3. Determine punch type (toggle check_in/check_out) ───────
-    const lastRecord = await demoStore.getLastAttendanceForStudent(student.id);
-    const punchType = (!lastRecord || lastRecord.type === 'check_out')
-      ? 'check_in'
-      : 'check_out';
-
-    // ── 4. Insert attendance record ───────────────────────────────
-    const record = await demoStore.insertAttendance({
-      student_id: student.id,
-      timestamp:  timestamp || new Date().toISOString(),
-      type:       punchType,
-      device_id:  device_id || undefined,
+    const { data: saved, error } = await createServiceClient().rpc('record_device_punch', {
+      p_student: student.id, p_timestamp: timestamp, p_device: device_id || 'k40',
+      p_source: body.source_event_id || null,
     });
+    if (error) throw error;
+    const record = saved.record;
+    const punchType = record.type;
+    if (saved.duplicate) return NextResponse.json({ success: true, duplicate: true, record_id: record.id });
 
     // ── 5. Notify linked parent ───────────────────────────────────
     const notificationResults: Record<string, unknown> = {};
 
-    if (student.parent) {
+    // Recovered historical scans are stored without sending an arrival alert now.
+    if (student.parent && Date.now() - Date.parse(timestamp) < 300000) {
       const settings = await demoStore.getFeeSettings();
       const message = buildAttendanceAlertMessage({
         studentName:  student.full_name,
@@ -66,7 +64,7 @@ export async function POST(req: NextRequest) {
         notificationResults.web_push = await sendWebPush(student.parent.web_push_sub, {
           title: `${title} — ${settings.institute_name || 'Okasha Institute'}`,
           body: `${student.full_name} has ${punchType === 'check_in' ? 'arrived at' : 'left'} the institute.`,
-          url: '/attendance',
+          url: '/parent-dashboard',
         });
       }
 

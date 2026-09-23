@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, ShieldAlert, LogOut, RefreshCw, GraduationCap, CheckCircle2 } from 'lucide-react';
 import { useAuth, getRoleHomePath } from '@/lib/auth-context';
@@ -10,6 +10,9 @@ export default function PendingPage() {
   const { session, logout, refreshSession, isDemoMode } = useAuth();
   const [checking, setChecking] = useState(false);
   const [msg, setMsg] = useState('');
+  useEffect(() => {
+    if (session && session.status !== 'pending') router.replace(getRoleHomePath(session.role, session.status));
+  }, [session, router]);
 
   const handleRefresh = async () => {
     setChecking(true);

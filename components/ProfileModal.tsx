@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   X, User, Phone, Fingerprint, CreditCard, Calendar,
   Clock, CheckCircle, AlertTriangle, XCircle, Download,
@@ -56,6 +56,8 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
   const [collectError, setCollectError] = useState('');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [lastReceiptNum, setLastReceiptNum] = useState('');
+  const paymentRequest = useRef<{ signature: string; id: string } | undefined>(undefined);
+  useEffect(() => () => { if (downloadUrl) URL.revokeObjectURL(downloadUrl); }, [downloadUrl]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -92,7 +94,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
     if (!student) return;
     const amount = parseFloat(feeAmount);
     const discount = parseFloat(feeDiscount) || 0;
-    if (!amount || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isFinite(discount) || discount < 0 || discount >= amount) {
       setCollectError('Please enter a valid fee amount.');
       return;
     }
@@ -100,6 +102,8 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
     setCollectError('');
     setDownloadUrl(null);
     try {
+      const signature = JSON.stringify([student.id, amount, discount, paymentMethod, feeNotes]);
+      if (paymentRequest.current?.signature !== signature) paymentRequest.current = { signature, id: crypto.randomUUID() };
       const resp = await fetch('/api/receipts/pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,15 +113,15 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
           discount,
           payment_method: paymentMethod,
           notes: feeNotes,
+          request_id: paymentRequest.current.id,
         }),
       });
-      if (!resp.ok) throw new Error('Payment processing failed.');
+      if (!resp.ok) { const error = await resp.json(); throw new Error(error.error || 'Payment processing failed.'); }
       const receiptNum = resp.headers.get('X-Receipt-Number') || '';
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setLastReceiptNum(receiptNum);
-      setStudent(prev => prev ? { ...prev, fee_status: 'paid' } : prev);
       await loadData();
       onFeeCollected?.();
     } catch (e) {
@@ -140,18 +144,32 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
         body: JSON.stringify({
           studentId: student.id,
           enrollType,
+          requestId: crypto.randomUUID(),
         }),
       });
       const data = await resp.json();
-      if (data.success) {
+      if (data.success || data.pending) {
         setEnrollMsg(data.message);
+        if (data.pending) {
+          const deadline = Date.now() + 60000;
+          let complete = false;
+          while (Date.now() < deadline) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const response = await fetch(`/api/zkt/enroll?commandId=${encodeURIComponent(data.commandId)}`);
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error);
+            if (result.state === 'succeeded') { setEnrollStatus('success'); setEnrollMsg('Bridge confirmed enrollment completed.'); complete = true; break; }
+            if (!['queued', 'running'].includes(result.state)) throw new Error(result.error?.message || `Enrollment ${result.state}. Verify the device before retrying.`);
+          }
+          if (!complete) throw new Error(`Enrollment is still pending (${data.commandId}). Check the bridge before retrying.`);
+        } else setEnrollStatus('success');
       } else {
         setEnrollStatus('error');
         setEnrollMsg(data.error || 'Failed to contact scanner');
       }
     } catch (err) {
       setEnrollStatus('error');
-      setEnrollMsg('Network error: could not reach enrollment API');
+      setEnrollMsg(err instanceof Error ? err.message : 'Could not reach enrollment API');
     } finally {
       setEnrollLoading(false);
     }
@@ -159,6 +177,9 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
 
   async function handleSaveEnrollment() {
     if (!student) return;
+    if ((enrollBiometricId && !/^\d{1,9}$/.test(enrollBiometricId)) || (enrollRfidTag && !/^\d+$/.test(enrollRfidTag))) {
+      setEnrollStatus('error'); setEnrollMsg('Use the numeric K40 user ID and actual numeric RFID card number, or leave them empty.'); return;
+    }
     setEnrollLoading(true);
     try {
       await demoStore.updateStudent(student.id, {
@@ -269,7 +290,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                   <div className="flex justify-between items-center">
                     <p className="section-title">Student Information</p>
                     {!editing ? (
-                      <button onClick={() => setEditing(true)} className="btn btn-secondary btn-sm">
+                      <button disabled={!canEnroll} onClick={() => setEditing(true)} className="btn btn-secondary btn-sm">
                         <Edit3 size={12} /> Edit
                       </button>
                     ) : (
@@ -406,7 +427,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                             <CheckCircle size={16} className="text-emerald-400" />
                           </div>
                           <div className="flex-1">
-                            <div className="text-sm font-semibold text-white">{r.receipt_number}</div>
+                            <a href={`/api/receipts/pdf?id=${r.id}`} className="text-sm font-semibold text-brand-300">{r.receipt_number} · Download</a>
                             <div className="text-xs text-slate-500">
                               {new Date(r.created_at).toLocaleDateString('en-PK', { year: 'numeric', month: 'long', day: 'numeric' })}
                               {' · '}{r.payment_method}
@@ -447,7 +468,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                         <Download size={18} /> Download PDF Receipt
                       </a>
                       <button
-                        onClick={() => { setDownloadUrl(null); setLastReceiptNum(''); setFeeNotes(''); }}
+                        onClick={() => { paymentRequest.current = undefined; setDownloadUrl(null); setLastReceiptNum(''); setFeeNotes(''); }}
                         className="btn-secondary"
                       >
                         Collect Another Payment
@@ -623,7 +644,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                           id="enroll-biometric-input"
                           type="text"
                           className="input font-mono text-sm"
-                          placeholder="e.g. BIO-001"
+                          placeholder="e.g. 101"
                           value={enrollBiometricId}
                           onChange={e => setEnrollBiometricId(e.target.value)}
                         />
@@ -636,7 +657,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                           id="enroll-rfid-input"
                           type="text"
                           className="input font-mono text-sm"
-                          placeholder="e.g. RFID-A1B2"
+                          placeholder="e.g. 12345678"
                           value={enrollRfidTag}
                           onChange={e => setEnrollRfidTag(e.target.value)}
                         />

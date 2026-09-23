@@ -45,5 +45,6 @@ export function useRequireAuth(allowedRoles?: UserRole[]) {
     }
   }, [session, isLoading, allowedRoles, router]);
 
-  return { session, isLoading };
+  const allowed = session?.status === 'approved' && (!allowedRoles || (session.role && allowedRoles.includes(session.role)));
+  return { session: allowed ? session : null, isLoading };
 }

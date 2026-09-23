@@ -1,9 +1,12 @@
+import { requireUser } from '@/lib/api-auth';
 import { NextResponse } from 'next/server';
-import { demoStore } from '@/lib/services/store';
+import { serverStore as demoStore } from '@/lib/services/server-store';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const auth = await requireUser(['super_admin']);
+  if (auth.response) return auth.response;
   try {
     const count = await demoStore.getPendingCount();
     return NextResponse.json({ count });

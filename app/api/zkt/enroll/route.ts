@@ -1,125 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/lib/api-auth';
+import { bridgeCommand, bridgeResult, hardwareConfiguration } from '@/lib/bridge';
+import { serverStore } from '@/lib/services/server-store';
 
 export const runtime = 'nodejs';
 
-/**
- * POST /api/zkt/enroll
- *
- * Sends a command to the ZKTeco scanner to initiate biometric or RFID
- * enrollment mode for a specific user slot.
- *
- * The ZKTeco PUSH SDK / ADMS server exposes HTTP commands that the
- * management software can call to trigger actions on the device.
- * This endpoint wraps those commands and returns a pending enrollment token.
- *
- * ZKTeco command reference:
- *   - Enroll finger: POST to device at /enrollment with { userId, type: 'fingerprint' }
- *   - Enroll RFID:   POST to device at /enrollment with { userId, type: 'rfid' }
- *
- * Body:
- *   { studentId: string, enrollType: 'fingerprint' | 'rfid', deviceIp?: string }
- *
- * Returns:
- *   { success: true, enrollmentToken: string, message: string }
- */
 export async function POST(req: NextRequest) {
+  const auth = await requireUser(['super_admin', 'staff']);
+  if (auth.response) return auth.response;
+  const device = await hardwareConfiguration().catch(()=>null);
+  const deviceId = device?.id;
+  if (!device?.configured) return NextResponse.json({ error: 'K40 is not configured. Save the student now and enroll when the device is available.' }, { status: 503 });
   try {
-    const body = await req.json();
-    const { studentId, enrollType, deviceIp } = body as {
-      studentId: string;
-      enrollType: 'fingerprint' | 'rfid';
-      deviceIp?: string;
-    };
-
-    if (!studentId || !enrollType) {
-      return NextResponse.json(
-        { error: 'Missing required fields: studentId, enrollType' },
-        { status: 400 }
-      );
+    const { studentId, enrollType, requestId } = await req.json();
+    if (!studentId || !['fingerprint', 'rfid'].includes(enrollType) || !/^[a-zA-Z0-9_.-]{1,64}$/.test(requestId || '')) {
+      return NextResponse.json({ error: 'studentId, enrollType and requestId are required' }, { status: 400 });
     }
-
-    // ── ZKTeco Device API call ────────────────────────────────────
-    // In production: the device IP is set in environment or passed in.
-    const zktDeviceUrl = deviceIp
-      ? `http://${deviceIp}`
-      : process.env.ZKT_DEVICE_URL;
-
-    const enrollmentToken = `enroll-${studentId}-${Date.now()}`;
-
-    if (zktDeviceUrl) {
-      // Real device call — tell the ZKTeco ADMS/Push SDK to open enrollment
-      // mode. Different ZKT firmware models use slightly different endpoints;
-      // the most common ADMS v2 command is below.
-      try {
-        const zktPayload = {
-          sn: process.env.ZKT_DEVICE_SN || 'AUTO',        // Device serial number
-          userId: studentId,
-          enrollType,                                        // 'fingerprint' or 'rfid'
-          backupIndex: enrollType === 'fingerprint' ? 0 : undefined, // finger slot 0
-        };
-
-        const zktResp = await fetch(`${zktDeviceUrl}/iclock/cdata?table=bioenroll`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Basic ${Buffer.from(
-              `${process.env.ZKT_DEVICE_USER || 'admin'}:${process.env.ZKT_DEVICE_PASS || 'admin'}`
-            ).toString('base64')}`,
-          },
-          body: JSON.stringify(zktPayload),
-          signal: AbortSignal.timeout(8000),
-        });
-
-        if (!zktResp.ok) {
-          const txt = await zktResp.text();
-          console.warn('[ZKT Enroll] Device returned non-OK:', zktResp.status, txt);
-          // Don't fail — device may still process the command
-        } else {
-          console.log('[ZKT Enroll] Device acknowledged enrollment command');
-        }
-      } catch (deviceErr) {
-        console.warn('[ZKT Enroll] Could not reach device — continuing in demo mode:', String(deviceErr));
-      }
-    } else {
-      // Demo mode — log and simulate
-      console.log(`[ZKT DEMO] Enrollment command sent → studentId=${studentId}, type=${enrollType}`);
-      console.log(`[ZKT DEMO] Token: ${enrollmentToken}`);
-      console.log(`[ZKT DEMO] Configure ZKT_DEVICE_URL in .env.local to connect a real device`);
-    }
-
-    return NextResponse.json({
-      success: true,
-      enrollmentToken,
-      deviceConnected: !!zktDeviceUrl,
-      message: zktDeviceUrl
-        ? `Enrollment command sent to ZKTeco device. Please place ${enrollType === 'fingerprint' ? 'finger' : 'RFID card'} on the scanner.`
-        : `[Demo] Enrollment mode simulated. In production, configure ZKT_DEVICE_URL in .env.local.`,
-    });
-  } catch (err) {
-    console.error('[ZKT Enroll Error]', err);
-    return NextResponse.json(
-      { error: 'Internal server error', details: String(err) },
-      { status: 500 }
-    );
-  }
+    const student = await serverStore.getStudentById(studentId);
+    if (!student || student.role !== 'student') return NextResponse.json({ error: 'Student not found' }, { status: 404 });
+    if (!/^\d{1,9}$/.test(student.biometric_id || '')) return NextResponse.json({ error: 'Save the numeric K40 user ID first' }, { status: 400 });
+    if (enrollType === 'rfid') return NextResponse.json({ error: 'Enroll the card on the K40, then save its actual card number here. Remote card capture is not exposed by pyzk.' }, { status: 422 });
+    // The user slot must already exist on the device; never overwrite an unknown slot.
+    const id = `enroll-${student.id}-${requestId}`;
+    const command = await bridgeCommand('hardware', 'enroll_user', { user_id: student.biometric_id, temp_id: 0 }, { deviceId }, id);
+    return NextResponse.json({ success: command.state === 'succeeded', pending: ['queued','running'].includes(command.state), commandId: id, state: command.state,
+      message: 'Enrollment requested. Follow the K40 prompts; completion must be confirmed by the bridge.' }, { status: 202 });
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Enrollment failed' }, { status: 502 }); }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    status: 'ok',
-    endpoint: '/api/zkt/enroll',
-    description: 'Send biometric/RFID enrollment command to ZKTeco scanner',
-    accepts: 'POST',
-    payload: {
-      studentId: 'string',
-      enrollType: 'fingerprint | rfid',
-      deviceIp: 'string? (overrides ZKT_DEVICE_URL env var)',
-    },
-    env_vars: {
-      ZKT_DEVICE_URL: 'http://<device-ip> — base URL of the ZKTeco device',
-      ZKT_DEVICE_SN: 'Device serial number (optional)',
-      ZKT_DEVICE_USER: 'Device admin username (default: admin)',
-      ZKT_DEVICE_PASS: 'Device admin password (default: admin)',
-    },
-  });
+export async function GET(req: NextRequest) {
+  const auth = await requireUser(['super_admin', 'staff']);
+  if (auth.response) return auth.response;
+  const id = req.nextUrl.searchParams.get('commandId');
+  if (!id?.startsWith('enroll-')) return NextResponse.json({ error: 'Enrollment command ID required' }, { status: 400 });
+  try { return NextResponse.json(await bridgeResult('hardware', id)); }
+  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Bridge unavailable' }, { status: 502 }); }
 }

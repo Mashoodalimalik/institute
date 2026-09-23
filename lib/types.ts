@@ -98,6 +98,7 @@ export interface CollectFeePayload {
 }
 
 export interface BiometricPushPayload {
+  source_event_id?: string;
   user_id: string;       // biometric_id or rfid_tag value
   id_type?: 'biometric' | 'rfid';
   timestamp: string;     // ISO8601

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { X, Upload, Loader2, Receipt } from 'lucide-react';
 import { demoStore } from '@/lib/services/store';
 import { EXPENSE_CATEGORIES } from '@/lib/types';
+import { createClient } from '@/lib/supabase/client';
 
 interface AddExpenseModalProps {
   onClose: () => void;
@@ -28,17 +29,28 @@ export default function AddExpenseModal({ onClose, onAdded }: AddExpenseModalPro
     }
     setLoading(true);
     setError('');
+    let attachment: string | undefined;
+    try {
+    if (receiptFile) {
+      if (!['image/jpeg', 'image/png', 'application/pdf'].includes(receiptFile.type) || receiptFile.size > 5 * 1024 * 1024) throw new Error('Upload a PDF, PNG or JPEG up to 5 MB.');
+      attachment = `${crypto.randomUUID()}/${receiptFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const { error } = await createClient().storage.from('expense-receipts').upload(attachment, receiptFile);
+      if (error) throw error;
+    }
     await demoStore.insertLedgerEntry({
       amount: amt,
       transaction_type: 'expense',
       category: EXPENSE_CATEGORIES.find(c => c.value === category)?.label || category,
       notes,
       date,
-      receipt_url: receiptFile ? URL.createObjectURL(receiptFile) : undefined,
+      receipt_url: attachment,
     });
-    setLoading(false);
     onAdded();
     onClose();
+    } catch (e) {
+      if (attachment) await createClient().storage.from('expense-receipts').remove([attachment]);
+      setError(e instanceof Error ? e.message : 'Could not save expense');
+    } finally { setLoading(false); }
   }
 
   return (

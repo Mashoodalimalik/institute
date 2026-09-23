@@ -14,8 +14,8 @@ export default function LoginPage() {
   const { session, isLoading, login } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [email, setEmail] = useState('admin@okasha.edu.pk');
-  const [password, setPassword] = useState('demo1234');
+  const [email, setEmail] = useState(IS_SUPABASE_LIVE ? '' : 'admin@okasha.edu.pk');
+  const [password, setPassword] = useState(IS_SUPABASE_LIVE ? '' : 'demo1234');
   const [fullName, setFullName] = useState('');
   const [requestedRole, setRequestedRole] = useState<'student' | 'parent' | 'staff'>('student');
   const [showPw, setShowPw] = useState(false);
@@ -251,8 +251,8 @@ export default function LoginPage() {
           {[
             { label: 'Role-Based Access', value: '4 Portals' },
             { label: 'Admin Approval', value: 'Protected' },
-            { label: 'Biometric Devices', value: '6 Ready' },
-            { label: 'OAuth Sign-in', value: 'Gmail' },
+            { label: 'Device Model', value: 'ZKTeco K40' },
+            { label: 'Account Access', value: 'Email' },
           ].map(stat => (
             <div key={stat.label} className="glass rounded-2xl p-4">
               <div className="text-2xl font-bold text-white">{stat.value}</div>
@@ -306,10 +306,11 @@ export default function LoginPage() {
           </h2>
           <p className="text-xs text-slate-500 mb-6">
             {mode === 'signin'
-              ? 'Sign in with your email, Gmail, or select a demo role'
+              ? (IS_SUPABASE_LIVE ? 'Sign in with your institute account email and password' : 'Explore using a demo role')
               : 'Sign up to request portal access. Super Admin will review and assign your role.'}
           </p>
 
+          {process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === 'true' && <>
           {/* Google OAuth Button */}
           <button
             type="button"
@@ -349,6 +350,9 @@ export default function LoginPage() {
             </span>
           </div>
 
+          </>}
+
+          {!IS_SUPABASE_LIVE && <>
           {/* Quick login pills (kept for testing convenience) */}
           <div className="mb-5">
             <p className="text-[11px] text-slate-500 mb-2 font-medium">Quick Demo Profiles:</p>
@@ -370,6 +374,8 @@ export default function LoginPage() {
               ))}
             </div>
           </div>
+
+          </>}
 
           <form onSubmit={handleSubmit} className="space-y-3.5">
             {mode === 'signup' && (

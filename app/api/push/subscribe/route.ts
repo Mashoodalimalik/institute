@@ -1,77 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { demoStore, isSupabaseConfigured } from '@/lib/services/store';
+import { requireUser } from '@/lib/api-auth';
+import { createServiceClient } from '@/lib/supabase/server';
 
 export async function POST(req: NextRequest) {
-  try {
-    const { subscription, userId } = await req.json();
-
-    if (!subscription) {
-      return NextResponse.json({ error: 'Subscription data required' }, { status: 400 });
-    }
-
-    const targetUserId = userId || 'parent-001';
-
-    if (isSupabaseConfigured) {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          web_push_sub: subscription,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', targetUserId);
-
-      if (error) {
-        console.error('Supabase update web_push_sub error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-    } else {
-      // Save in Demo Store
-      const parent = demoStore.getParent(targetUserId);
-      if (parent) {
-        parent.web_push_sub = subscription;
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Push subscription saved successfully.',
-    });
-  } catch (err: any) {
-    console.error('Subscribe POST error:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const body = await req.json().catch(() => null);
+  const subscription = body?.subscription;
+  let endpoint: URL;
+  try { endpoint = new URL(subscription?.endpoint); }
+  catch { return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 }); }
+  // Prevent a stored subscription from becoming an arbitrary server fetch target.
+  const validHost = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com'].includes(endpoint.hostname)
+    || endpoint.hostname.endsWith('.notify.windows.com');
+  if (endpoint.protocol !== 'https:' || endpoint.port || endpoint.username || endpoint.password || !validHost || !subscription?.keys?.auth || !subscription?.keys?.p256dh) {
+    return NextResponse.json({ error: 'Invalid push provider or keys' }, { status: 400 });
   }
+  const { error } = await createServiceClient().from('profiles').update({ web_push_sub: subscription }).eq('id', auth.profile.id);
+  return NextResponse.json(error ? { error: 'Could not save subscription' } : { success: true }, { status: error ? 500 : 200 });
 }
 
-export async function DELETE(req: NextRequest) {
-  try {
-    const { userId } = await req.json();
-    const targetUserId = userId || 'parent-001';
-
-    if (isSupabaseConfigured) {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
-      await supabase
-        .from('profiles')
-        .update({ web_push_sub: null })
-        .eq('id', targetUserId);
-    } else {
-      const parent = demoStore.getParent(targetUserId);
-      if (parent) {
-        parent.web_push_sub = null;
-      }
-    }
-
-    return NextResponse.json({ success: true, message: 'Push subscription removed.' });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+export async function DELETE() {
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const { error } = await createServiceClient().from('profiles').update({ web_push_sub: null }).eq('id', auth.profile.id);
+  return NextResponse.json(error ? { error: 'Could not remove subscription' } : { success: true }, { status: error ? 500 : 200 });
 }

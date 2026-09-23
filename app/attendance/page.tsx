@@ -5,33 +5,33 @@ import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { Clock, UserCheck, UserX, RefreshCw, Calendar } from 'lucide-react';
 import { AttendanceRecord } from '@/lib/types';
-import { demoStore, DEMO_STUDENTS } from '@/lib/services/store';
+import { demoStore } from '@/lib/services/store';
+import { pakistanDate } from '@/lib/dates';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 
 export default function AttendancePage() {
   const { session, isLoading: authLoading } = useRequireAuth(['super_admin', 'staff']);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    // Get all attendance combined from all students (in demo mode)
-    const allRecords: AttendanceRecord[] = [];
-    for (const student of DEMO_STUDENTS) {
-      const recs = await demoStore.getAttendanceForStudent(student.id);
-      allRecords.push(...recs.map(r => ({ ...r, student })));
-    }
+    setError('');
+    try {
+    const allRecords = await demoStore.getAllAttendance();
     allRecords.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     setRecords(allRecords);
-    setLoading(false);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load data'); }
+    finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (!authLoading && session) void loadData(); }, [loadData, authLoading, session?.userId]);
 
   if (authLoading || !session) return null;
 
-  const today = new Date().toDateString();
-  const todayRecords = records.filter(r => new Date(r.timestamp).toDateString() === today);
+  const today = pakistanDate();
+  const todayRecords = records.filter(r => pakistanDate(r.timestamp) === today);
   const checkIns = todayRecords.filter(r => r.type === 'check_in').length;
   const checkOuts = todayRecords.filter(r => r.type === 'check_out').length;
   const uniqueToday = new Set(todayRecords.map(r => r.student_id)).size;
@@ -51,6 +51,7 @@ export default function AttendancePage() {
         />
 
         <div className="flex-1 p-6 space-y-6">
+          {error && <p role="alert" className="text-red-400">{error}</p>}
           {/* Today Stats */}
           <div className="grid grid-cols-3 gap-4">
             <div className="stat-card card">

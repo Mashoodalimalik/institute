@@ -1,0 +1,4 @@
+fastapi==0.116.1
+pydantic==2.11.7
+uvicorn==0.35.0
+pyzk @ git+https://github.com/fananimi/pyzk.git@f29709c17bb8f1bbb5382d2670b493207cb35ff1

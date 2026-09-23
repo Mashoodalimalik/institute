@@ -1,5 +1,7 @@
+import { requireUser } from '@/lib/api-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { demoStore, isSupabaseConfigured } from '@/lib/services/store';
+import { serverStore as demoStore } from '@/lib/services/server-store';
+import { isSupabaseConfigured } from '@/lib/services/store';
 import { UserRole } from '@/lib/types';
 
 /**
@@ -7,6 +9,8 @@ import { UserRole } from '@/lib/types';
  * Body: { userId: string, action: 'approve' | 'reject', role?: UserRole }
  */
 export async function POST(request: NextRequest) {
+  const auth = await requireUser(['super_admin']);
+  if (auth.response) return auth.response;
   try {
     const body = await request.json();
     const { userId, action, role } = body as {
@@ -17,6 +21,12 @@ export async function POST(request: NextRequest) {
 
     if (!userId || !action) {
       return NextResponse.json({ error: 'userId and action are required' }, { status: 400 });
+    }
+    if (role && !['super_admin', 'staff', 'student', 'parent'].includes(role)) {
+      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    }
+    if (userId === auth.profile.id && (action === 'reject' || (role && role !== 'super_admin'))) {
+      return NextResponse.json({ error: 'You cannot remove your own administrator access' }, { status: 400 });
     }
 
     if (action === 'approve') {

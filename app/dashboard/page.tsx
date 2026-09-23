@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const [students, setStudents] = useState<Profile[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('all');
   const [feeFilter, setFeeFilter] = useState('all');
@@ -51,17 +52,20 @@ export default function DashboardPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setError('');
+    try {
     const [s, st] = await Promise.all([
       demoStore.getStudents({ search, class_name: classFilter, fee_status: feeFilter }),
       demoStore.getDashboardStats(),
     ]);
     setStudents(s);
     setStats(st);
-    setClasses(demoStore.getUniqueClasses());
-    setLoading(false);
+    setClasses(await demoStore.getUniqueClasses());
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load data'); }
+    finally { setLoading(false); }
   }, [search, classFilter, feeFilter]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (!authLoading && session) void loadData(); }, [loadData, authLoading, session?.userId]);
 
   // Wait for auth check
   if (authLoading || !session) return null;
@@ -86,6 +90,7 @@ export default function DashboardPage() {
         />
 
         <div className="flex-1 p-6 space-y-6">
+          {error && <p role="alert" className="text-red-400">{error}</p>}
           {/* Stats Row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
@@ -99,7 +104,7 @@ export default function DashboardPage() {
               icon={<CheckCircle size={22} className="text-emerald-400" />}
               label="Fees Paid"
               value={stats?.paid_count ?? '—'}
-              sub={`${stats ? Math.round((stats.paid_count / stats.total_students) * 100) : 0}% of total`}
+              sub={`${stats?.total_students ? Math.round((stats.paid_count / stats.total_students) * 100) : 0}% of total`}
               color="bg-emerald-500/15"
             />
             <StatCard

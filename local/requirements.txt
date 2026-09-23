@@ -1,0 +1,2 @@
+# Same pyzk revision as the source bridge; avoids the older global pyzk 0.9 API.
+pyzk @ git+https://github.com/fananimi/pyzk.git@f29709c17bb8f1bbb5382d2670b493207cb35ff1

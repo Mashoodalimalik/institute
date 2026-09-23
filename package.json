@@ -6,31 +6,42 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test:integration": "node --env-file=.env.local tests/integration.mjs",
+    "bridge:forward": "node --env-file=.env.local scripts/bridge-forwarder.mjs",
+    "bridge:whatsapp": "node --env-file=.env.local scripts/raw-bridge.mjs",
+    "local:bridge": "node --env-file=.env.local scripts/raw-bridge.mjs",
+    "local:backend": "node --env-file=.env.local scripts/local-backend.mjs",
+    "local:services": "node --env-file=.env.local scripts/local-services.mjs",
+    "build:bridge": "pwsh -NoProfile -File bridge/packaging/build.ps1",
+    "test:whatsapp": "node --test tests/whatsapp-bridge.test.mjs tests/local-backend.test.mjs",
+    "test:hardware": "node --env-file=.env.local scripts/test-hardware.mjs"
   },
   "dependencies": {
-    "@react-pdf/renderer": "^3.4.4",
+    "@react-pdf/renderer": "4.9.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "@types/web-push": "^3.6.4",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.460.0",
-    "next": "14.2.20",
-    "next-pwa": "^5.6.0",
-    "react": "^18",
-    "react-dom": "^18",
-    "twilio": "^5.3.4",
+    "next": "15.5.26",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "autoprefixer": "^10",
     "eslint": "^8",
-    "eslint-config-next": "14.2.20",
-    "postcss": "^8",
+    "eslint-config-next": "15.5.26",
+    "postcss": "8.5.28",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "8.5.28"
   }
 }

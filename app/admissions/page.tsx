@@ -48,8 +48,8 @@ export default function AdmissionsPage() {
   const [parentEmail, setParentEmail] = useState('');
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!authLoading && session) loadData().catch(e => alert(e.message));
+  }, [authLoading, session?.userId]);
 
   if (authLoading || !session) return null;
 
@@ -59,15 +59,18 @@ export default function AdmissionsPage() {
     setParents(parentList);
     setStudents(studentList);
 
-    // Auto-generate RFID and Biometric defaults for easy demoing
-    const nextNum = studentList.length + 1;
-    setRfidTag(`RFID-X${100 + nextNum}`);
-    setBiometricId(`BIO-0${10 + nextNum}`);
+    // Keep device identifiers empty until assigned on the actual K40.
+    setRfidTag('');
+    setBiometricId('');
   }
 
   const handleAdmissionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentName.trim()) return;
+    if (!Number.isFinite(Number(monthlyFee)) || Number(monthlyFee) < 0) { alert('Enter a valid monthly fee'); return; }
+    if (parentMode === 'existing' && !selectedParentId) { alert('Select a parent first'); return; }
+    if (biometricId && !/^\d{1,9}$/.test(biometricId)) { alert('K40 user ID must contain 1 to 9 digits, or be left empty'); return; }
+    if (rfidTag && !/^\d+$/.test(rfidTag)) { alert('Use the numeric RFID card number, or leave empty'); return; }
 
     setLoading(true);
     setSuccessMsg('');
@@ -93,10 +96,10 @@ export default function AdmissionsPage() {
       // Create Student
       const newStudent = await demoStore.addStudent({
         full_name: studentName,
-        email: studentEmail || `${studentName.toLowerCase().replace(/\s+/g, '.')}@student.com`,
+        email: studentEmail || undefined,
         phone_number: studentPhone,
         class_name: className,
-        monthly_fee: parseFloat(monthlyFee) || 5000,
+        monthly_fee: Number(monthlyFee),
         rfid_tag: rfidTag,
         biometric_id: biometricId,
         parent_id: finalParentId,
@@ -105,7 +108,7 @@ export default function AdmissionsPage() {
       setSuccessMsg(`Student "${newStudent.full_name}" admitted successfully! ID: ${newStudent.id}`);
       
       // Refresh list
-      loadData();
+      await loadData();
 
       // Reset form
       setStudentName('');
@@ -285,7 +288,7 @@ export default function AdmissionsPage() {
                         type="text"
                         value={rfidTag}
                         onChange={(e) => setRfidTag(e.target.value)}
-                        placeholder="RFID-A101"
+                        placeholder="e.g. 12345678"
                         className="w-full px-4 py-2.5 rounded-xl bg-surface-800 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 text-sm font-mono"
                       />
                     </div>
@@ -298,7 +301,7 @@ export default function AdmissionsPage() {
                         type="text"
                         value={biometricId}
                         onChange={(e) => setBiometricId(e.target.value)}
-                        placeholder="BIO-005"
+                        placeholder="e.g. 101"
                         className="w-full px-4 py-2.5 rounded-xl bg-surface-800 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 text-sm font-mono"
                       />
                     </div>
@@ -451,7 +454,7 @@ export default function AdmissionsPage() {
                   <ShieldCheck size={18} /> Instant Integration
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Submitting this form automatically connects the student's RFID card and Biometric profile to daily automated attendance & web push notification dispatches.
+                  Save student details now. Assign actual device IDs and enable attendance when the K40 is connected through the institute bridge.
                 </p>
               </div>
 

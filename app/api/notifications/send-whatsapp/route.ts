@@ -1,6 +1,7 @@
+import { requireUser } from '@/lib/api-auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendWhatsApp, buildReceiptMessage } from '@/lib/services/notifications';
-import { demoStore } from '@/lib/services/store';
+import { serverStore as demoStore } from '@/lib/services/server-store';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +10,8 @@ export const runtime = 'nodejs';
  * Send a WhatsApp notification (receipt, reminder, or custom) to a phone number.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireUser(['super_admin', 'staff']);
+  if (auth.response) return auth.response;
   try {
     const { student_id, receipt_id, custom_message, phone } = await req.json();
 
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await sendWhatsApp(recipientPhone, message);
-    return NextResponse.json({ success: result.success, sid: result.sid, demo: result.demo, error: result.error });
+    return NextResponse.json({ success: result.success, sid: result.sid, error: result.error }, { status: result.success ? 200 : 502 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

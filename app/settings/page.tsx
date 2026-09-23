@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import BridgeStatus from '@/components/BridgeStatus';
+import WhatsAppConnection from '@/components/WhatsAppConnection';
 import {
   Settings, Bell, MessageSquare, Phone, Calendar, Clock,
   DollarSign, Loader2, Save, CheckCircle, AlertTriangle,
@@ -60,10 +62,12 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    demoStore.getFeeSettings().then(s => { setSettings(s); setLoading(false); });
-  }, []);
+    if (authLoading || !session) return;
+    demoStore.getFeeSettings().then(setSettings).catch(e => setError(e.message)).finally(() => setLoading(false));
+  }, [authLoading, session?.userId]);
 
   function update(key: keyof FeeSettings, value: unknown) {
     setSettings(prev => prev ? { ...prev, [key]: value } : prev);
@@ -73,12 +77,16 @@ export default function SettingsPage() {
   async function handleSave() {
     if (!settings) return;
     setSaving(true);
-    await demoStore.updateFeeSettings(settings);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    try {
+      await demoStore.updateFeeSettings(settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save settings'); }
+    finally { setSaving(false); }
   }
 
+  if (authLoading || !session) return null;
+  if (error && !settings) return <p role="alert" className="p-6 text-red-400">{error}</p>;
   if (loading || !settings) {
     return (
       <div className="flex min-h-screen">
@@ -95,8 +103,8 @@ export default function SettingsPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 pt-14 lg:pt-0">
         <Header
-          title="Fee Settings"
-          subtitle="Configure universal fee rules and notification channels"
+          title="Settings"
+          subtitle="Manage WhatsApp, devices, fee rules and notifications"
           actions={
             <button
               id="save-settings-btn"
@@ -115,6 +123,9 @@ export default function SettingsPage() {
         />
 
         <div className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-6">
+          {error && <p role="alert" className="text-red-400">{error}</p>}
+          <WhatsAppConnection />
+          <BridgeStatus />
 
           {/* Institute Info */}
           <SettingSection title="Institute Details" icon={<Settings size={16} className="text-brand-400" />}>
@@ -168,7 +179,8 @@ export default function SettingsPage() {
 
             <div className="grid grid-cols-2 gap-4 pt-1">
               <div>
-                <label className="input-label">Late Fee Amount (PKR)</label>
+                <label className="input-label">Late Fee Reference {settings.late_fee_is_percent ? '(%)' : '(PKR)'}</label>
+                <p className="text-xs text-slate-500 mb-2">Recorded for reference; late fees must be collected manually.</p>
                 <input
                   id="late-fee-input"
                   type="number"
@@ -225,8 +237,7 @@ export default function SettingsPage() {
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2">
               <AlertTriangle size={14} className="text-amber-400 mt-0.5 flex-shrink-0" />
               <p className="text-xs text-amber-300/80">
-                Configure Twilio credentials in <code className="bg-amber-500/10 px-1 py-0.5 rounded text-xs">.env.local</code> to enable live notifications. 
-                In demo mode, messages are logged to the server console.
+                WhatsApp requires a connected institute account in the local bridge. SMS requires a configured provider.
               </p>
             </div>
 
@@ -243,7 +254,7 @@ export default function SettingsPage() {
 
             <SettingRow
               label="WhatsApp Notifications"
-              description="Send reminders & receipts via Twilio WhatsApp API"
+              description="Send reminders and receipts through the local WhatsApp bridge"
             >
               <Toggle
                 id="toggle-whatsapp"
@@ -252,53 +263,6 @@ export default function SettingsPage() {
               />
             </SettingRow>
 
-            {(settings.notify_sms || settings.notify_whatsapp) && (
-              <div className="pt-2 space-y-3 border-t border-white/[0.06]">
-                <p className="text-xs text-slate-500 font-medium">Twilio Credentials</p>
-                <div>
-                  <label className="input-label">Twilio Account SID</label>
-                  <input
-                    type="text"
-                    className="input font-mono text-xs"
-                    placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    value={settings.twilio_account_sid || ''}
-                    onChange={e => update('twilio_account_sid', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="input-label">Twilio Auth Token</label>
-                  <input
-                    type="password"
-                    className="input font-mono text-xs"
-                    placeholder="••••••••••••••••••••••••••••••••"
-                    value={settings.twilio_auth_token || ''}
-                    onChange={e => update('twilio_auth_token', e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="input-label">From Phone (SMS)</label>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="+1234567890"
-                      value={settings.twilio_phone_number || ''}
-                      onChange={e => update('twilio_phone_number', e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="input-label">WhatsApp From Number</label>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="whatsapp:+14155238886"
-                      value={settings.whatsapp_from_number || ''}
-                      onChange={e => update('whatsapp_from_number', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </SettingSection>
 
           {/* Cron Info */}
@@ -309,8 +273,8 @@ export default function SettingsPage() {
                 <div>
                   <div className="text-sm font-medium text-slate-300">Fee Reminder Cron</div>
                   <div className="text-xs text-slate-600 mt-0.5">
-                    Runs daily at 09:00 AM via <code className="text-xs bg-surface-700 px-1 py-0.5 rounded">/api/cron/fee-reminders</code>
-                    — checks overdue status and sends reminders.
+                    The Vercel schedule targets 09:00 AM Pakistan time via <code className="text-xs bg-surface-700 px-1 py-0.5 rounded">/api/cron/fee-reminders</code>.
+                    A local reminder scheduler is not configured. Enabling WhatsApp alone does not start scheduled reminders.
                   </div>
                 </div>
               </div>
@@ -319,7 +283,7 @@ export default function SettingsPage() {
                 <div>
                   <div className="text-sm font-medium text-slate-300">Biometric Webhook</div>
                   <div className="text-xs text-slate-600 mt-0.5">
-                    ZKTeco devices push to <code className="text-xs bg-surface-700 px-1 py-0.5 rounded">/api/attendance/push</code>
+                    The K40 bridge forwards attendance to <code className="text-xs bg-surface-700 px-1 py-0.5 rounded">/api/attendance/push</code>
                     — auto check_in/check_out with parent alerts.
                   </div>
                 </div>
@@ -330,7 +294,7 @@ export default function SettingsPage() {
                   <div className="text-sm font-medium text-slate-300">PDF Receipt Generation</div>
                   <div className="text-xs text-slate-600 mt-0.5">
                     On fee collection, a branded PDF is auto-generated via <code className="text-xs bg-surface-700 px-1 py-0.5 rounded">/api/receipts/pdf</code>
-                    and sent to parent WhatsApp if enabled.
+                    and can be downloaded again from the student’s fee history. Payments do not automatically send a WhatsApp receipt yet.
                   </div>
                 </div>
               </div>

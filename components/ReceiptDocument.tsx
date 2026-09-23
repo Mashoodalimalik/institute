@@ -1,21 +1,11 @@
-'use client';
-
 import {
-  Document, Page, Text, View, StyleSheet, Font,
+  Document, Page, Text, View, StyleSheet,
 } from '@react-pdf/renderer';
 import { Receipt, Profile } from '@/lib/types';
 
-Font.register({
-  family: 'Inter',
-  fonts: [
-    { src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hiJ-Ek-_EeA.woff', fontWeight: 400 },
-    { src: 'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYAZ9hiJ-Ek-_EeA.woff', fontWeight: 700 },
-  ],
-});
-
 const styles = StyleSheet.create({
   page: {
-    fontFamily: 'Inter',
+    fontFamily: 'Helvetica',
     backgroundColor: '#ffffff',
     padding: 48,
     fontSize: 9,
@@ -207,10 +197,10 @@ export default function ReceiptDocument({
   const netAmount = receipt.amount - receipt.discount;
   const createdDate = new Date(receipt.created_at);
   const dateStr = createdDate.toLocaleDateString('en-PK', {
-    year: 'numeric', month: 'long', day: 'numeric'
+    year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Karachi'
   });
   const timeStr = createdDate.toLocaleTimeString('en-PK', {
-    hour: '2-digit', minute: '2-digit'
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi'
   });
 
   return (

@@ -14,6 +14,7 @@ import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const d = new Date();
+  d.setDate(1);
   d.setMonth(d.getMonth() - i);
   return {
     value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
@@ -30,16 +31,20 @@ export default function LedgerPage() {
   const [month, setMonth] = useState(currentMonth);
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showAddExpense, setShowAddExpense] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setError('');
+    try {
     const data = await demoStore.getLedger(month);
     setEntries(data);
-    setLoading(false);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load data'); }
+    finally { setLoading(false); }
   }, [month]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (!authLoading && session) void loadData(); }, [loadData, authLoading, session?.userId]);
 
   if (authLoading || !session) return null;
 
@@ -67,6 +72,7 @@ export default function LedgerPage() {
         />
 
         <div className="flex-1 p-6 space-y-6">
+          {error && <p role="alert" className="text-red-400">{error}</p>}
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="stat-card card">
@@ -180,6 +186,7 @@ export default function LedgerPage() {
                         <td>
                           <div className="font-medium text-white text-sm">{entry.category}</div>
                           {entry.notes && <div className="text-xs text-slate-600 truncate max-w-[200px]">{entry.notes}</div>}
+                          {entry.receipt_url && <a className="text-xs text-brand-300" href={`/api/expenses/attachment?id=${entry.id}`}>View attachment</a>}
                         </td>
                         <td>
                           <span className={entry.transaction_type === 'income' ? 'badge-income' : 'badge-expense'}>

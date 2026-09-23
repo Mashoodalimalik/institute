@@ -1,10 +1,10 @@
 /**
  * NOTIFICATION SERVICE
- * Supports SMS, WhatsApp (via Twilio), and Web Push API (via web-push).
+ * Supports SMS (Twilio), WhatsApp (local backend/Baileys), and Web Push.
  */
 
 import webpush from 'web-push';
-import vapidKeysJson from '@/lib/vapid-keys.json';
+import { sendBridgeWhatsApp } from '@/lib/bridge';
 
 interface NotificationPayload {
   to: string;
@@ -20,9 +20,9 @@ interface NotificationResult {
 }
 
 // Configure Web Push VAPID keys
-const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || vapidKeysJson.publicKey;
-const privateVapidKey = process.env.VAPID_PRIVATE_KEY || vapidKeysJson.privateKey;
-const vapidSubject = process.env.VAPID_SUBJECT || vapidKeysJson.subject;
+const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:mrzeeshan6009@gmail.com';
 
 if (publicVapidKey && privateVapidKey) {
   try {
@@ -69,7 +69,7 @@ export async function sendNotification(payload: NotificationPayload): Promise<No
   if (isDemoMode) {
     console.log(`[DEMO NOTIFICATION] ${payload.channel.toUpperCase()} → ${payload.to}`);
     console.log(`  Message: ${payload.message}`);
-    return { success: true, demo: true };
+    return { success: false, error: 'SMS provider is not configured' };
   }
 
   try {
@@ -112,7 +112,8 @@ export async function sendSMS(to: string, message: string): Promise<Notification
 }
 
 export async function sendWhatsApp(to: string, message: string): Promise<NotificationResult> {
-  return sendNotification({ to, message, channel: 'whatsapp' });
+  try { return await sendBridgeWhatsApp(to, message); }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'WhatsApp bridge unavailable' }; }
 }
 
 export function buildFeeReminderMessage(params: {
@@ -137,7 +138,7 @@ export function buildAttendanceAlertMessage(params: {
   instituteName: string;
 }): string {
   const { studentName, type, timestamp, instituteName } = params;
-  const time = new Date(timestamp).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+  const time = new Date(timestamp).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Karachi' });
   const action = type === 'check_in' ? '✅ Checked IN' : '🚪 Checked OUT';
   return `${action} — *${instituteName}*\n${studentName} has ${type === 'check_in' ? 'arrived at' : 'left'} the institute at ${time}.`;
 }

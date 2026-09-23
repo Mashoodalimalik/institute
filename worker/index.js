@@ -1,4 +1,9 @@
 // Custom Service Worker logic for Web Push API in next-pwa
+// No authenticated pages or API responses are cached.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))).then(() => self.clients.claim()));
+});
 
 self.addEventListener('push', function (event) {
   if (!event.data) return;
@@ -34,7 +39,8 @@ self.addEventListener('notificationclick', function (event) {
 
   if (event.action === 'close') return;
 
-  const urlToOpen = (event.notification.data && event.notification.data.url) || '/';
+  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin);
+  const urlToOpen = target.origin === self.location.origin ? target.href : self.location.origin;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {

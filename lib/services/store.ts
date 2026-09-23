@@ -5,7 +5,10 @@
  * Otherwise → uses in-memory demo dataset so the dashboard works out of the box.
  */
 
-import { createClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/client';
+import { monthBounds, pakistanDayBounds } from '@/lib/dates';
+import { withParents } from './profile-relations.mjs';
 import {
   Profile,
   LedgerEntry,
@@ -22,12 +25,6 @@ const isSupabaseConfigured =
   typeof process !== 'undefined' &&
   !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
   !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your_supabase');
-
-function getSupabaseClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key);
-}
 
 // ================================================================
 // DEMO SEED DATA
@@ -200,12 +197,13 @@ function enrichStudentsDemo(students: Profile[]): Profile[] {
 // UNIFIED STORE SERVICE
 // ================================================================
 
-export const demoStore = {
+export function createStore(getSupabaseClient: () => SupabaseClient = createClient) {
+return {
   // ─── Students ───────────────────────────────────────────────
   async getStudents(filters?: { class_name?: string; fee_status?: string; search?: string }): Promise<Profile[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      let query = supabase.from('profiles').select('*, parent:profiles!parent_id(*)').eq('role', 'student');
+      let query = supabase.from('profiles').select('*').eq('role', 'student');
 
       if (filters?.class_name && filters.class_name !== 'all') {
         query = query.eq('class_name', filters.class_name);
@@ -214,15 +212,13 @@ export const demoStore = {
         query = query.eq('fee_status', filters.fee_status);
       }
       if (filters?.search) {
-        query = query.or(`full_name.ilike.%${filters.search}%,rfid_tag.ilike.%${filters.search}%,biometric_id.ilike.%${filters.search}%`);
+        const search = filters.search.replace(/[,%().\"\\]/g, ' ').trim();
+        query = query.or(`full_name.ilike.%${search}%,rfid_tag.ilike.%${search}%,biometric_id.ilike.%${search}%,phone_number.ilike.%${search}%`);
       }
 
       const { data, error } = await query;
-      if (error) {
-        console.error('Supabase getStudents error:', error);
-        return enrichStudentsDemo(DEMO_STUDENTS);
-      }
-      return data || [];
+      if (error) throw error;
+      return withParents(supabase, data || []);
     }
 
     // Demo store fallback
@@ -248,8 +244,9 @@ export const demoStore = {
   async getStudentById(id: string): Promise<Profile | null> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.from('profiles').select('*, parent:profiles!parent_id(*)').eq('id', id).single();
-      return data || null;
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+      if (error) throw error;
+      return data ? (await withParents(supabase, [data]))[0] : null;
     }
     const student = DEMO_STUDENTS.find(s => s.id === id);
     if (!student) return null;
@@ -259,9 +256,13 @@ export const demoStore = {
   async updateStudent(id: string, data: Partial<Profile>): Promise<Profile> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data: updated, error } = await supabase.from('profiles').update(data).eq('id', id).select('*, parent:profiles!parent_id(*)').single();
+      const payload: Record<string, unknown> = { ...data };
+      for (const key of ['biometric_id', 'rfid_tag']) {
+        if (Object.prototype.hasOwnProperty.call(data, key) && !payload[key]) payload[key] = null;
+      }
+      const { data: updated, error } = await supabase.from('profiles').update(payload).eq('id', id).select('*').single();
       if (error) throw error;
-      return updated;
+      return (await withParents(supabase, [updated]))[0];
     }
     const idx = DEMO_STUDENTS.findIndex(s => s.id === id);
     if (idx === -1) throw new Error('Student not found');
@@ -277,16 +278,17 @@ export const demoStore = {
         full_name: data.full_name || 'New Student',
         email: data.email,
         phone_number: data.phone_number,
-        rfid_tag: data.rfid_tag,
-        biometric_id: data.biometric_id,
-        parent_id: data.parent_id,
+        status: 'approved',
+        rfid_tag: data.rfid_tag || null,
+        biometric_id: data.biometric_id || null,
+        parent_id: data.parent_id || null,
         class_name: data.class_name,
         fee_status: 'unpaid',
         monthly_fee: data.monthly_fee || 0,
       };
-      const { data: created, error } = await supabase.from('profiles').insert(payload).select('*, parent:profiles!parent_id(*)').single();
+      const { data: created, error } = await supabase.from('profiles').insert(payload).select('*').single();
       if (error) throw error;
-      return created;
+      return (await withParents(supabase, [created]))[0];
     }
     const newStudent: Profile = {
       id: `student-${Date.now()}`,
@@ -311,7 +313,8 @@ export const demoStore = {
   async getParents(): Promise<Profile[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.from('profiles').select('*').eq('role', 'parent');
+      const { data, error } = await supabase.from('profiles').select('*').eq('role', 'parent');
+      if (error) throw error;
       return data || [];
     }
     return [...DEMO_PARENTS];
@@ -322,6 +325,7 @@ export const demoStore = {
       const supabase = getSupabaseClient();
       const payload = {
         role: 'parent',
+        status: 'approved',
         full_name: data.full_name,
         email: data.email,
         phone_number: data.phone_number,
@@ -350,10 +354,19 @@ export const demoStore = {
   },
 
   // ─── Attendance ──────────────────────────────────────────────
+  async getAllAttendance(): Promise<AttendanceRecord[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await getSupabaseClient().from('attendance').select('*, student:profiles!student_id(*)').order('timestamp', { ascending: false }).limit(1000);
+      if (error) throw error;
+      return data || [];
+    }
+    return DEMO_ATTENDANCE.map(record => ({ ...record, student: DEMO_STUDENTS.find(student => student.id === record.student_id) }));
+  },
   async getAttendanceForStudent(studentId: string): Promise<AttendanceRecord[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.from('attendance').select('*').eq('student_id', studentId).order('timestamp', { ascending: false });
+      const { data, error } = await supabase.from('attendance').select('*').eq('student_id', studentId).order('timestamp', { ascending: false });
+      if (error) throw error;
       return data || [];
     }
     return DEMO_ATTENDANCE
@@ -364,9 +377,9 @@ export const demoStore = {
   async getAllAttendanceToday(): Promise<AttendanceRecord[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const { data } = await supabase.from('attendance').select('*, student:profiles!student_id(*)').gte('timestamp', todayStart.toISOString());
+      const todayBounds = pakistanDayBounds();
+      const { data, error } = await supabase.from('attendance').select('*, student:profiles!student_id(*)').gte('timestamp', todayBounds.start).lt('timestamp', todayBounds.end);
+      if (error) throw error;
       return data || [];
     }
     const today = new Date().toDateString();
@@ -392,7 +405,8 @@ export const demoStore = {
   async getLastAttendanceForStudent(studentId: string): Promise<AttendanceRecord | null> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.from('attendance').select('*').eq('student_id', studentId).order('timestamp', { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await supabase.from('attendance').select('*').eq('student_id', studentId).order('timestamp', { ascending: false }).limit(1).maybeSingle();
+      if (error) throw error;
       return data || null;
     }
     const today = new Date().toDateString();
@@ -408,9 +422,11 @@ export const demoStore = {
       const supabase = getSupabaseClient();
       let query = supabase.from('ledger').select('*, student:profiles!student_id(*)').order('date', { ascending: false });
       if (month) {
-        query = query.gte('date', `${month}-01`).lte('date', `${month}-31`);
+        const { start, end } = monthBounds(month);
+        query = query.gte('date', start).lt('date', end);
       }
-      const { data } = await query;
+      const { data, error } = await query;
+      if (error) throw error;
       return data || [];
     }
     let entries = [...DEMO_LEDGER].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -443,7 +459,8 @@ export const demoStore = {
   async getReceiptsForStudent(studentId: string): Promise<Receipt[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.from('receipts').select('*').eq('student_id', studentId).order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('receipts').select('*').eq('student_id', studentId).order('created_at', { ascending: false });
+      if (error) throw error;
       return data || [];
     }
     return DEMO_RECEIPTS
@@ -471,8 +488,10 @@ export const demoStore = {
   async getFeeSettings(): Promise<FeeSettings> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.from('fee_settings').select('*').limit(1).maybeSingle();
-      if (data) return data;
+      const { data, error } = await supabase.from('fee_settings').select('*').limit(1).maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Fee settings are missing');
+      return data;
     }
     return { ...demoSettings };
   },
@@ -493,20 +512,23 @@ export const demoStore = {
   async getDashboardStats(): Promise<DashboardStats> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data: students } = await supabase.from('profiles').select('fee_status').eq('role', 'student');
+      const { data: students, error: studentsError } = await supabase.from('profiles').select('fee_status').eq('role', 'student');
+      if (studentsError) throw studentsError;
       const total_students = students?.length || 0;
       const paid_count = students?.filter(s => s.fee_status === 'paid').length || 0;
       const unpaid_count = students?.filter(s => s.fee_status === 'unpaid').length || 0;
       const overdue_count = students?.filter(s => s.fee_status === 'overdue').length || 0;
 
-      const monthStr = `${thisYear}-${thisMonth}`;
-      const { data: ledger } = await supabase.from('ledger').select('amount, transaction_type').gte('date', `${monthStr}-01`);
+      const monthStr = new Date().toISOString().slice(0, 7);
+      const bounds = monthBounds(monthStr);
+      const { data: ledger, error: ledgerError } = await supabase.from('ledger').select('amount, transaction_type').gte('date', bounds.start).lt('date', bounds.end);
+      if (ledgerError) throw ledgerError;
       const monthly_income = ledger?.filter(e => e.transaction_type === 'income').reduce((sum, e) => sum + Number(e.amount), 0) || 0;
       const monthly_expenses = ledger?.filter(e => e.transaction_type === 'expense').reduce((sum, e) => sum + Number(e.amount), 0) || 0;
 
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const { data: att } = await supabase.from('attendance').select('student_id').gte('timestamp', todayStart.toISOString());
+      const todayBounds = pakistanDayBounds();
+      const { data: att, error: attendanceError } = await supabase.from('attendance').select('student_id').gte('timestamp', todayBounds.start).lt('timestamp', todayBounds.end);
+      if (attendanceError) throw attendanceError;
       const todays_attendance = new Set(att?.map(a => a.student_id)).size;
 
       return {
@@ -550,12 +572,14 @@ export const demoStore = {
   async findStudentByBiometric(userId: string): Promise<Profile | null> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .select('*, parent:profiles!parent_id(*)')
-        .or(`biometric_id.eq.${userId},rfid_tag.eq.${userId}`)
+        .select('*')
+        .eq('role', 'student').eq('status', 'approved')
+        .or(`biometric_id.eq.${JSON.stringify(userId)},rfid_tag.eq.${JSON.stringify(userId)}`)
         .maybeSingle();
-      return data || null;
+      if (error) throw error;
+      return data ? (await withParents(supabase, [data]))[0] : null;
     }
     const student = DEMO_STUDENTS.find(
       s => s.biometric_id === userId || s.rfid_tag === userId
@@ -567,12 +591,14 @@ export const demoStore = {
   async getStudentsNeedingReminders(settings: FeeSettings): Promise<Profile[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .select('*, parent:profiles!parent_id(*)')
+        .select('*')
         .eq('role', 'student')
+        .eq('status', 'approved')
         .neq('fee_status', 'paid');
-      return data || [];
+      if (error) throw error;
+      return withParents(supabase, data || []);
     }
     const today = new Date();
     return DEMO_STUDENTS
@@ -585,7 +611,12 @@ export const demoStore = {
       .map(s => ({ ...s, parent: getParentDemo(s.parent_id) }));
   },
 
-  getUniqueClasses(): string[] {
+  async getUniqueClasses(): Promise<string[]> {
+    if (isSupabaseConfigured) {
+      const { data, error } = await getSupabaseClient().from('profiles').select('class_name').eq('role', 'student');
+      if (error) throw error;
+      return Array.from(new Set((data || []).map(row => row.class_name as string).filter(Boolean))).sort();
+    }
     return Array.from(new Set(DEMO_STUDENTS.map(s => s.class_name).filter(Boolean) as string[])).sort();
   },
 
@@ -593,11 +624,12 @@ export const demoStore = {
   async getPendingUsers(): Promise<Profile[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
+      if (error) throw error;
       return data || [];
     }
     return DEMO_PENDING_USERS.filter(u => u.status === 'pending');
@@ -606,10 +638,11 @@ export const demoStore = {
   async getAllUsers(): Promise<Profile[]> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
+      if (error) throw error;
       return data || [];
     }
     return [...DEMO_PENDING_USERS, ...DEMO_STUDENTS, ...DEMO_PARENTS];
@@ -618,10 +651,11 @@ export const demoStore = {
   async getPendingCount(): Promise<number> {
     if (isSupabaseConfigured) {
       const supabase = getSupabaseClient();
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from('profiles')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending');
+      if (error) throw error;
       return count || 0;
     }
     return DEMO_PENDING_USERS.filter(u => u.status === 'pending').length;
@@ -634,7 +668,8 @@ export const demoStore = {
         .from('profiles')
         .update({ status: 'approved', role, updated_at: new Date().toISOString() })
         .eq('id', userId);
-      return !error;
+      if (error) throw error;
+      return true;
     }
     const idx = DEMO_PENDING_USERS.findIndex(u => u.id === userId);
     if (idx !== -1) {
@@ -653,7 +688,8 @@ export const demoStore = {
         .from('profiles')
         .update({ status: 'rejected', updated_at: new Date().toISOString() })
         .eq('id', userId);
-      return !error;
+      if (error) throw error;
+      return true;
     }
     const idx = DEMO_PENDING_USERS.findIndex(u => u.id === userId);
     if (idx !== -1) {
@@ -671,7 +707,8 @@ export const demoStore = {
         .from('profiles')
         .update({ role, updated_at: new Date().toISOString() })
         .eq('id', userId);
-      return !error;
+      if (error) throw error;
+      return true;
     }
     const all = [...DEMO_PENDING_USERS, ...DEMO_STUDENTS, ...DEMO_PARENTS];
     const u = all.find(x => x.id === userId);
@@ -699,6 +736,9 @@ export const demoStore = {
     return newUser;
   },
 };
+}
+
+export const demoStore = createStore();
 
 export let DEMO_PENDING_USERS: Profile[] = [
   {
