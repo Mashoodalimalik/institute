@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { LedgerEntry } from '@/lib/types';
 import { demoStore } from '@/lib/services/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const d = new Date();
@@ -21,6 +22,7 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
 });
 
 export default function LedgerPage() {
+  const { session, isLoading: authLoading } = useRequireAuth(['super_admin']);
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -38,6 +40,8 @@ export default function LedgerPage() {
   }, [month]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  if (authLoading || !session) return null;
 
   const filtered = typeFilter === 'all' ? entries : entries.filter(e => e.transaction_type === typeFilter);
   const totalIncome = entries.filter(e => e.transaction_type === 'income').reduce((s, e) => s + e.amount, 0);

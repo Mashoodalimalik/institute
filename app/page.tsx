@@ -1,41 +1,66 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Lock, Mail, Eye, EyeOff, Loader2, GraduationCap } from 'lucide-react';
+import { useAuth, DEMO_CREDENTIALS, getRoleHomePath } from '@/lib/auth-context';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { session, isLoading, login } = useAuth();
   const [email, setEmail] = useState('admin@okasha.edu.pk');
   const [password, setPassword] = useState('demo1234');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // If already logged in, redirect to the correct home page
+  useEffect(() => {
+    if (!isLoading && session) {
+      router.replace(getRoleHomePath(session.role));
+    }
+  }, [session, isLoading, router]);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
-    // Simulate auth delay; in production this calls Supabase auth.signInWithPassword
-    await new Promise(r => setTimeout(r, 900));
-    if (email && password.length >= 4) {
-      router.push('/dashboard');
-    } else {
+
+    // Simulate auth delay
+    await new Promise(r => setTimeout(r, 800));
+
+    if (!email || password.length < 4) {
       setError('Invalid credentials. Use any email with 4+ char password.');
       setLoading(false);
+      return;
     }
+
+    // Resolve demo session from credentials
+    const demoSession = DEMO_CREDENTIALS[email.toLowerCase()];
+    const resolvedSession = demoSession ?? {
+      role: 'staff' as const,
+      userId: `user-${Date.now()}`,
+      full_name: email.split('@')[0],
+      email,
+    };
+
+    login(resolvedSession);
+    router.replace(getRoleHomePath(resolvedSession.role));
   }
 
   function quickLogin(role: string) {
     const creds: Record<string, { email: string; pw: string }> = {
-      super_admin: { email: 'admin@okasha.edu.pk', pw: 'demo1234' },
-      staff:       { email: 'staff@okasha.edu.pk', pw: 'demo1234' },
+      super_admin: { email: 'admin@okasha.edu.pk',   pw: 'demo1234' },
+      staff:       { email: 'staff@okasha.edu.pk',   pw: 'demo1234' },
       student:     { email: 'student@okasha.edu.pk', pw: 'demo1234' },
-      parent:      { email: 'parent@okasha.edu.pk', pw: 'demo1234' },
+      parent:      { email: 'parent@okasha.edu.pk',  pw: 'demo1234' },
     };
     setEmail(creds[role].email);
     setPassword(creds[role].pw);
   }
+
+  // While restoring session, show nothing (avoids flash)
+  if (isLoading) return null;
 
   return (
     <main className="min-h-screen flex">
@@ -92,19 +117,24 @@ export default function LoginPage() {
           </div>
 
           <h2 className="text-3xl font-bold text-white mb-2">Welcome back</h2>
-          <p className="text-slate-500 mb-8">Sign in to access your dashboard</p>
+          <p className="text-slate-500 mb-8">Sign in to access your portal</p>
 
           {/* Quick login pills */}
           <div className="mb-6">
             <p className="text-xs text-slate-600 mb-2.5 font-medium">Quick login (demo):</p>
             <div className="flex flex-wrap gap-2">
-              {['super_admin', 'staff', 'student', 'parent'].map(role => (
+              {[
+                { key: 'super_admin', label: 'Super Admin' },
+                { key: 'staff',       label: 'Staff' },
+                { key: 'student',     label: 'Student' },
+                { key: 'parent',      label: 'Parent' },
+              ].map(({ key, label }) => (
                 <button
-                  key={role}
-                  onClick={() => quickLogin(role)}
+                  key={key}
+                  onClick={() => quickLogin(key)}
                   className="px-3 py-1 rounded-full text-xs bg-surface-800 border border-white/10 text-slate-400 hover:text-white hover:border-brand-500/50 transition-all duration-150"
                 >
-                  {role.replace('_', ' ')}
+                  {label}
                 </button>
               ))}
             </div>
@@ -169,7 +199,28 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs text-slate-600 mt-8">
+          {/* Role hints */}
+          <div className="mt-6 p-4 rounded-xl bg-surface-800/60 border border-white/[0.06] space-y-2">
+            <p className="text-xs font-semibold text-slate-400 mb-2">Demo Access Levels:</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { role: 'Super Admin', desc: 'Full access', color: 'text-brand-400' },
+                { role: 'Staff',       desc: 'No financials', color: 'text-violet-400' },
+                { role: 'Student',     desc: 'Own attendance & fees', color: 'text-emerald-400' },
+                { role: 'Parent',      desc: 'Children overview', color: 'text-amber-400' },
+              ].map(r => (
+                <div key={r.role} className="flex items-start gap-1.5">
+                  <span className={`text-[10px] font-bold ${r.color} mt-0.5`}>●</span>
+                  <div>
+                    <div className={`text-[11px] font-semibold ${r.color}`}>{r.role}</div>
+                    <div className="text-[10px] text-slate-600">{r.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-center text-xs text-slate-600 mt-6">
             Okasha Institute Management System — v2.0<br />
             <span className="text-slate-700">For production, configure Supabase in .env.local</span>
           </p>

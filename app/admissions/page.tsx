@@ -20,8 +20,10 @@ import {
   ArrowRight,
   ShieldCheck,
 } from 'lucide-react';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 
 export default function AdmissionsPage() {
+  const { session, isLoading: authLoading } = useRequireAuth(['super_admin', 'staff']);
   const [parents, setParents] = useState<Profile[]>([]);
   const [students, setStudents] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,6 +50,8 @@ export default function AdmissionsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  if (authLoading || !session) return null;
 
   async function loadData() {
     const parentList = await demoStore.getParents();

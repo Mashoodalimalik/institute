@@ -5,9 +5,11 @@ import {
   X, User, Phone, Fingerprint, CreditCard, Calendar,
   Clock, CheckCircle, AlertTriangle, XCircle, Download,
   Loader2, ChevronDown, MessageSquare, Edit3, Save, Plus,
+  Radio, Wifi, WifiOff, ScanLine,
 } from 'lucide-react';
 import { Profile, AttendanceRecord, Receipt, PaymentMethod, PAYMENT_METHODS } from '@/lib/types';
 import { demoStore } from '@/lib/services/store';
+import { useAuth } from '@/lib/auth-context';
 
 interface ProfileModalProps {
   studentId: string;
@@ -21,9 +23,13 @@ const FeeStatusIcon = ({ status }: { status: string }) => {
   return <AlertTriangle size={14} className="text-amber-400" />;
 };
 
-type ActiveTab = 'info' | 'attendance' | 'fees' | 'collect';
+type ActiveTab = 'info' | 'attendance' | 'fees' | 'collect' | 'enrollment';
 
 export default function ProfileModal({ studentId, onClose, onFeeCollected }: ProfileModalProps) {
+  const { session } = useAuth();
+  const canEnroll = session?.role === 'super_admin' || session?.role === 'staff';
+  const canCollectFee = session?.role === 'super_admin' || session?.role === 'staff';
+
   const [student, setStudent] = useState<Profile | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -31,6 +37,15 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Profile>>({});
+
+  // Enrollment state
+  const [enrollBiometricId, setEnrollBiometricId] = useState('');
+  const [enrollRfidTag, setEnrollRfidTag] = useState('');
+  const [enrollLoading, setEnrollLoading] = useState(false);
+  const [enrollStatus, setEnrollStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle');
+  const [enrollMsg, setEnrollMsg] = useState('');
+  const [enrollType, setEnrollType] = useState<'fingerprint' | 'rfid'>('fingerprint');
+  const [enrollSaved, setEnrollSaved] = useState(false);
 
   // Fee collection form
   const [feeAmount, setFeeAmount] = useState('');
@@ -54,6 +69,11 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
     setFeeAmount(String(s?.monthly_fee || ''));
     setAttendance(att);
     setReceipts(rec);
+    // Populate enrollment fields from existing data
+    if (s) {
+      setEnrollBiometricId(s.biometric_id || '');
+      setEnrollRfidTag(s.rfid_tag || '');
+    }
     setLoading(false);
   }, [studentId]);
 
@@ -107,11 +127,67 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
     }
   }
 
+  // ── ZKT Enrollment ───────────────────────────────────────────
+  async function handleSendZktCommand() {
+    if (!student) return;
+    setEnrollLoading(true);
+    setEnrollStatus('waiting');
+    setEnrollMsg(`Sending ${enrollType} enrollment command to ZKTeco scanner...`);
+    try {
+      const resp = await fetch('/api/zkt/enroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId: student.id,
+          enrollType,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        setEnrollMsg(data.message);
+      } else {
+        setEnrollStatus('error');
+        setEnrollMsg(data.error || 'Failed to contact scanner');
+      }
+    } catch (err) {
+      setEnrollStatus('error');
+      setEnrollMsg('Network error: could not reach enrollment API');
+    } finally {
+      setEnrollLoading(false);
+    }
+  }
+
+  async function handleSaveEnrollment() {
+    if (!student) return;
+    setEnrollLoading(true);
+    try {
+      await demoStore.updateStudent(student.id, {
+        biometric_id: enrollBiometricId || undefined,
+        rfid_tag: enrollRfidTag || undefined,
+      });
+      setStudent(prev => prev ? {
+        ...prev,
+        biometric_id: enrollBiometricId || undefined,
+        rfid_tag: enrollRfidTag || undefined,
+      } : prev);
+      setEnrollSaved(true);
+      setEnrollStatus('success');
+      setEnrollMsg('Biometric/RFID credentials saved successfully.');
+      setTimeout(() => { setEnrollSaved(false); setEnrollStatus('idle'); setEnrollMsg(''); }, 3000);
+    } catch (err) {
+      setEnrollStatus('error');
+      setEnrollMsg('Failed to save credentials.');
+    } finally {
+      setEnrollLoading(false);
+    }
+  }
+
   const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'info',       label: 'Profile',    icon: <User size={14} /> },
     { id: 'attendance', label: 'Attendance', icon: <Calendar size={14} /> },
     { id: 'fees',       label: 'Fee History', icon: <CreditCard size={14} /> },
-    { id: 'collect',    label: 'Collect Fee', icon: <Plus size={14} /> },
+    ...(canCollectFee ? [{ id: 'collect' as ActiveTab, label: 'Collect Fee', icon: <Plus size={14} /> }] : []),
+    ...(canEnroll ? [{ id: 'enrollment' as ActiveTab, label: 'Enrollment', icon: <ScanLine size={14} /> }] : []),
   ];
 
   const initials = student?.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || '??';
@@ -464,6 +540,132 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ── Enrollment Tab ─────────────────────────────── */}
+              {activeTab === 'enrollment' && (
+                <div className="animate-fade-in space-y-5">
+                  <p className="section-title">Biometric & RFID Enrollment</p>
+
+                  {/* ZKT Command Panel */}
+                  <div className="p-4 rounded-xl bg-surface-800/60 border border-brand-500/20 space-y-4">
+                    <div className="flex items-center gap-2 text-brand-400 font-semibold text-xs uppercase tracking-wider">
+                      <Radio size={14} /> ZKTeco Scanner Command
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Select enrollment type and click <strong className="text-white">Send to Scanner</strong>. The website will send a command to the ZKTeco device to open enrollment mode — then ask the student to scan their finger or RFID card on the device.
+                    </p>
+
+                    {/* Enrollment type toggle */}
+                    <div>
+                      <label className="input-label">Enrollment Type</label>
+                      <div className="flex gap-2 mt-1">
+                        {[
+                          { val: 'fingerprint' as const, icon: <Fingerprint size={14} />, label: 'Fingerprint' },
+                          { val: 'rfid' as const, icon: <CreditCard size={14} />, label: 'RFID Card' },
+                        ].map(opt => (
+                          <button
+                            key={opt.val}
+                            onClick={() => setEnrollType(opt.val)}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+                              enrollType === opt.val
+                                ? 'bg-brand-600/20 border-brand-500/50 text-brand-300'
+                                : 'bg-surface-800 border-white/10 text-slate-500 hover:text-slate-300'
+                            }`}
+                          >
+                            {opt.icon} {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      id="zkt-enroll-btn"
+                      onClick={handleSendZktCommand}
+                      disabled={enrollLoading}
+                      className="btn-primary w-full"
+                    >
+                      {enrollLoading
+                        ? <><Loader2 size={16} className="animate-spin" /> Sending Command...</>
+                        : <><Radio size={16} /> Send to ZKTeco Scanner</>
+                      }
+                    </button>
+
+                    {/* Status feedback */}
+                    {enrollMsg && (
+                      <div className={`p-3 rounded-xl text-xs flex items-start gap-2 ${
+                        enrollStatus === 'error'
+                          ? 'bg-red-500/10 border border-red-500/30 text-red-400'
+                          : enrollStatus === 'success'
+                          ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                          : 'bg-brand-500/10 border border-brand-500/20 text-brand-300'
+                      }`}>
+                        {enrollStatus === 'waiting' && <Loader2 size={14} className="animate-spin flex-shrink-0 mt-0.5" />}
+                        {enrollStatus === 'success' && <CheckCircle size={14} className="flex-shrink-0 mt-0.5" />}
+                        {enrollStatus === 'error' && <XCircle size={14} className="flex-shrink-0 mt-0.5" />}
+                        {enrollMsg}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Manual ID Entry */}
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      Or Set IDs Manually
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="input-label flex items-center gap-1.5">
+                          <Fingerprint size={12} className="text-violet-400" /> Biometric ID
+                        </label>
+                        <input
+                          id="enroll-biometric-input"
+                          type="text"
+                          className="input font-mono text-sm"
+                          placeholder="e.g. BIO-001"
+                          value={enrollBiometricId}
+                          onChange={e => setEnrollBiometricId(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="input-label flex items-center gap-1.5">
+                          <CreditCard size={12} className="text-brand-400" /> RFID Tag
+                        </label>
+                        <input
+                          id="enroll-rfid-input"
+                          type="text"
+                          className="input font-mono text-sm"
+                          placeholder="e.g. RFID-A1B2"
+                          value={enrollRfidTag}
+                          onChange={e => setEnrollRfidTag(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      id="save-enrollment-btn"
+                      onClick={handleSaveEnrollment}
+                      disabled={enrollLoading}
+                      className="btn-primary w-full"
+                    >
+                      {enrollLoading
+                        ? <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                        : enrollSaved
+                        ? <><CheckCircle size={16} className="text-emerald-300" /> Saved!</>
+                        : <><Save size={16} /> Save Credentials</>
+                      }
+                    </button>
+                  </div>
+
+                  {/* Device config hint */}
+                  <div className="p-3 rounded-xl bg-surface-800/40 border border-white/[0.06] text-xs text-slate-500 leading-relaxed">
+                    <strong className="text-slate-400">ZKTeco Setup:</strong> Set device Push URL to{' '}
+                    <code className="bg-surface-700 px-1 py-0.5 rounded text-brand-300">
+                      /api/attendance/push
+                    </code>{' '}
+                    and configure <code className="bg-surface-700 px-1 py-0.5 rounded">ZKT_DEVICE_URL</code> in{' '}
+                    <code className="bg-surface-700 px-1 py-0.5 rounded">.env.local</code> to enable live two-way commands.
+                  </div>
                 </div>
               )}
             </>

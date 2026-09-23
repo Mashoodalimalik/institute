@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { Profile, DashboardStats } from '@/lib/types';
 import { demoStore } from '@/lib/services/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
+import { useAuth } from '@/lib/auth-context';
 
 const FEE_STATUS_OPTIONS = [
   { value: 'all',     label: 'All Status' },
@@ -35,6 +37,9 @@ function StatCard({ icon, label, value, sub, color }: {
 }
 
 export default function DashboardPage() {
+  const { session, isLoading: authLoading } = useRequireAuth(['super_admin', 'staff']);
+  const isSuperAdmin = session?.role === 'super_admin';
+
   const [students, setStudents] = useState<Profile[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +62,9 @@ export default function DashboardPage() {
   }, [search, classFilter, feeFilter]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Wait for auth check
+  if (authLoading || !session) return null;
 
   const feeStatusColor: Record<string, string> = {
     paid: 'badge-paid', unpaid: 'badge-unpaid', overdue: 'badge-overdue',
@@ -110,20 +118,24 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Secondary Stats */}
+          {/* Secondary Stats — financial cards hidden from staff */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard
-              icon={<TrendingUp size={22} className="text-emerald-400" />}
-              label="Monthly Income"
-              value={`PKR ${(stats?.monthly_income ?? 0).toLocaleString()}`}
-              color="bg-emerald-500/15"
-            />
-            <StatCard
-              icon={<TrendingUp size={22} className="text-red-400 rotate-180" />}
-              label="Monthly Expenses"
-              value={`PKR ${(stats?.monthly_expenses ?? 0).toLocaleString()}`}
-              color="bg-red-500/15"
-            />
+            {isSuperAdmin && (
+              <StatCard
+                icon={<TrendingUp size={22} className="text-emerald-400" />}
+                label="Monthly Income"
+                value={`PKR ${(stats?.monthly_income ?? 0).toLocaleString()}`}
+                color="bg-emerald-500/15"
+              />
+            )}
+            {isSuperAdmin && (
+              <StatCard
+                icon={<TrendingUp size={22} className="text-red-400 rotate-180" />}
+                label="Monthly Expenses"
+                value={`PKR ${(stats?.monthly_expenses ?? 0).toLocaleString()}`}
+                color="bg-red-500/15"
+              />
+            )}
             <StatCard
               icon={<UserCheck size={22} className="text-brand-400" />}
               label="Today's Attendance"

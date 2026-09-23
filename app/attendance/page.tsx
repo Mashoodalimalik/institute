@@ -6,8 +6,10 @@ import Header from '@/components/Header';
 import { Clock, UserCheck, UserX, RefreshCw, Calendar } from 'lucide-react';
 import { AttendanceRecord } from '@/lib/types';
 import { demoStore, DEMO_STUDENTS } from '@/lib/services/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 
 export default function AttendancePage() {
+  const { session, isLoading: authLoading } = useRequireAuth(['super_admin', 'staff']);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,6 +27,8 @@ export default function AttendancePage() {
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  if (authLoading || !session) return null;
 
   const today = new Date().toDateString();
   const todayRecords = records.filter(r => new Date(r.timestamp).toDateString() === today);

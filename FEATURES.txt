@@ -1,0 +1,98 @@
+OKASHA INSTITUTE MANAGEMENT SYSTEM — FEATURE REFERENCE
+=======================================================
+
+LOGIN & AUTHENTICATION
+- Multi-role login page with quick-login demo pills for Super Admin, Staff, Student, and Parent.
+- Session is stored in localStorage so it survives page refresh and is only cleared on logout.
+- Each role is automatically redirected to their designated home page immediately after login.
+- Super Admin and Staff go to /dashboard, Students go to /my-attendance, Parents go to /parent-dashboard.
+- Any user who manually visits a URL they are not allowed to see is instantly redirected to their correct home.
+
+ROLE-BASED ACCESS CONTROL (RBAC)
+- Super Admin has full access to every page and feature in the system.
+- Staff can access Dashboard, Students, Admissions, and Attendance but cannot see Ledger, Settings, or financial stats.
+- Student can only see their own attendance history and their own fee receipts — no other student data is visible.
+- Parent can only see their linked children's attendance and fee status — no financial management tools.
+- The sidebar navigation dynamically shows only the pages permitted for the logged-in role.
+- A colour-coded role badge (Super Admin=indigo, Staff=violet, Student=green, Parent=amber) is displayed in the sidebar.
+
+DASHBOARD (Super Admin & Staff)
+- Displays total students enrolled, paid count, unpaid count, and overdue count as stat cards.
+- Monthly income and monthly expenses stats are visible to Super Admin only — hidden from Staff.
+- Today's attendance count (unique students scanned) is shown to both Admin and Staff.
+- Full student list with search, class filter, and fee status filter in a sortable table.
+- Clicking any student row opens their full profile modal.
+
+STUDENT PROFILE MODAL (Admin & Staff)
+- Profile tab shows student's name, class, phone, monthly fee, biometric ID, and RFID tag.
+- Attendance tab shows the student's complete check-in/check-out history.
+- Fee History tab shows all issued receipts with amounts, dates, and payment methods.
+- Collect Fee tab (Admin/Staff only) allows collecting a payment and generating a branded PDF receipt.
+- Enrollment tab (Admin/Staff only) sends a live command to the ZKTeco scanner to start biometric or RFID enrollment for that student.
+
+BIOMETRIC & RFID ENROLLMENT (ZKTeco Integration)
+- The website sends an HTTP command to the ZKTeco ADMS/Push SDK API to trigger enrollment mode on the physical scanner.
+- Admin selects Fingerprint or RFID Card enrollment type before sending the command.
+- A live status indicator shows the command state: sending, waiting for scan, success, or error.
+- Biometric ID and RFID Tag can also be set manually via text fields as a fallback.
+- The ZKTeco device pushes attendance events (check-in/check-out) to /api/attendance/push automatically.
+- Configure ZKT_DEVICE_URL, ZKT_DEVICE_SN, ZKT_DEVICE_USER, ZKT_DEVICE_PASS in .env.local to connect a real device.
+
+ADMISSIONS (Admin & Staff)
+- New student registration form with fields for name, class, monthly fee, email, and phone.
+- Biometric ID and RFID tag can be assigned at the time of admission.
+- Supports linking to an existing parent account or creating a new parent/guardian profile in one step.
+- Enrolled student is immediately active for attendance scanning and fee collection.
+
+ATTENDANCE — ADMIN VIEW (/attendance)
+- Displays all attendance records across all students sorted by most recent.
+- Shows today's unique student count, total check-ins, and total check-outs as summary cards.
+- Table shows student name, class, check-in/out type, exact timestamp, and device ID.
+
+MY ATTENDANCE — STUDENT VIEW (/my-attendance)
+- Shows the logged-in student's personal check-in/check-out history only.
+- A prominent banner shows whether the student is currently checked IN or not checked in today.
+- Stats show total days present, total check-ins, and total check-outs.
+
+PARENT DASHBOARD (/parent-dashboard)
+- Shows a card for each linked child with their name, class, and current fee status badge.
+- Displays whether each child is present today based on their latest biometric scan.
+- Shows days present, monthly fee amount, total receipts issued, and last payment date per child.
+- Lists the 5 most recent attendance events per child.
+
+MY FEES (/my-fees — Student & Parent)
+- Shows the current fee status (paid/unpaid/overdue) with a colour-coded status card.
+- Displays total amount paid across all receipts and count of payments made.
+- Lists all individual payment receipts with receipt number, date, method, and net amount.
+
+FINANCIAL LEDGER (/ledger — Super Admin only)
+- Month-selector dropdown to view income and expenses for any of the past 12 months.
+- Stat cards show total income, total expenses, and net balance for the selected month.
+- Filterable table of all transactions with income/expense type, category, student link, and notes.
+- Add Expense button opens a modal to log new operational expenses (rent, salaries, utilities, etc).
+
+SETTINGS (/settings — Super Admin only)
+- Set the universal fee due day (1–31), grace period in days, and late fee amount or percentage.
+- Configure fee reminder interval — how many days between sending re-reminders.
+- Enable or disable SMS and WhatsApp notifications via Twilio with credential fields.
+- View automation status: fee reminder cron, biometric webhook receiver, and PDF receipt generation.
+
+AUTOMATED NOTIFICATIONS
+- Parents receive WhatsApp or SMS alerts whenever their child checks in or checks out via biometric scan.
+- Web push notifications are sent to parents who have granted browser notification permission.
+- Fee reminder cron runs daily at 09:00 AM and sends reminders to parents of unpaid/overdue students.
+
+PDF RECEIPTS
+- A branded PDF receipt is auto-generated on every fee collection with receipt number, student details, and payment breakdown.
+- The receipt is available for immediate download from the profile modal after payment.
+- Receipt is optionally sent to the parent's WhatsApp if the notification channel is enabled.
+
+TECHNOLOGY STACK
+- Built with Next.js 14 (App Router), TypeScript, and Tailwind CSS.
+- Auth context uses React Context + localStorage for persistent, refresh-safe sessions.
+- Demo mode works fully offline with in-memory data — no database required to run.
+- Supabase (PostgreSQL) is supported as the live database by setting credentials in .env.local.
+- ZKTeco ADMS/WDMS biometric integration via HTTP push webhooks and enrollment commands.
+- Twilio used for SMS and WhatsApp notification delivery.
+- PDF receipts generated server-side using react-pdf/renderer.
+- Progressive Web App (PWA) — installable on mobile and desktop with offline support.

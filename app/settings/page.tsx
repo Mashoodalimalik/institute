@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { FeeSettings } from '@/lib/types';
 import { demoStore } from '@/lib/services/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 
 function Toggle({ checked, onToggle, id }: { checked: boolean; onToggle: () => void; id: string }) {
   return (
@@ -54,6 +55,7 @@ function SettingRow({ label, description, children }: { label: string; descripti
 }
 
 export default function SettingsPage() {
+  const { session, isLoading: authLoading } = useRequireAuth(['super_admin']);
   const [settings, setSettings] = useState<FeeSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

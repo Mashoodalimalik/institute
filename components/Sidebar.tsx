@@ -1,22 +1,49 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   GraduationCap, LayoutDashboard, Users, BookOpen,
   BarChart3, Settings, LogOut, Menu, X, ChevronRight,
-  UserPlus,
+  UserPlus, Calendar, CreditCard, Home, Shield,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth, getNavPermissions } from '@/lib/auth-context';
 
-const NAV_ITEMS = [
-  { href: '/dashboard',   icon: LayoutDashboard, label: 'Dashboard',   badge: null },
-  { href: '/students',    icon: Users,            label: 'Students',    badge: null },
-  { href: '/admissions',  icon: UserPlus,         label: 'Admissions',  badge: null },
-  { href: '/attendance',  icon: BookOpen,         label: 'Attendance',  badge: null },
-  { href: '/ledger',      icon: BarChart3,        label: 'Ledger',      badge: null },
-  { href: '/settings',    icon: Settings,         label: 'Settings',    badge: null },
-];
+// ── All possible nav items ───────────────────────────────────────
+
+const ALL_NAV = [
+  // Admin / Staff
+  { key: 'dashboard',       href: '/dashboard',        icon: LayoutDashboard, label: 'Dashboard' },
+  { key: 'students',        href: '/students',         icon: Users,           label: 'Students' },
+  { key: 'admissions',      href: '/admissions',       icon: UserPlus,        label: 'Admissions' },
+  { key: 'attendance',      href: '/attendance',       icon: BookOpen,        label: 'Attendance' },
+  { key: 'ledger',          href: '/ledger',           icon: BarChart3,       label: 'Ledger' },
+  { key: 'settings',        href: '/settings',         icon: Settings,        label: 'Settings' },
+  // Student
+  { key: 'myAttendance',    href: '/my-attendance',    icon: Calendar,        label: 'My Attendance' },
+  { key: 'myFees',          href: '/my-fees',          icon: CreditCard,      label: 'My Fees' },
+  // Parent
+  { key: 'parentDashboard', href: '/parent-dashboard', icon: Home,            label: 'Home' },
+] as const;
+
+type NavKey = typeof ALL_NAV[number]['key'];
+
+// ── Role badge colours ───────────────────────────────────────────
+
+const ROLE_BADGE: Record<string, { label: string; cls: string }> = {
+  super_admin: { label: 'Super Admin', cls: 'bg-brand-500/20 text-brand-300 border-brand-500/30' },
+  staff:       { label: 'Staff',       cls: 'bg-violet-500/20 text-violet-300 border-violet-500/30' },
+  student:     { label: 'Student',     cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  parent:      { label: 'Parent',      cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+};
+
+const ROLE_AVATAR_GRADIENT: Record<string, string> = {
+  super_admin: 'from-brand-500 to-violet-600',
+  staff:       'from-violet-500 to-blue-600',
+  student:     'from-emerald-500 to-teal-600',
+  parent:      'from-amber-500 to-orange-600',
+};
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -24,8 +51,27 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed: initialCollapsed = false }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { session, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const role = session?.role ?? 'staff';
+  const perms = getNavPermissions(role);
+  const badge = ROLE_BADGE[role];
+  const avatarGradient = ROLE_AVATAR_GRADIENT[role];
+
+  // Filter nav items to only those the role can see
+  const navItems = ALL_NAV.filter(item => perms[item.key as NavKey]);
+
+  function handleLogout() {
+    logout();
+    router.replace('/');
+  }
+
+  const initials = session?.full_name
+    ? session.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    : '??';
 
   const NavContent = () => (
     <>
@@ -47,8 +93,8 @@ export default function Sidebar({ collapsed: initialCollapsed = false }: Sidebar
         {!collapsed && (
           <p className="section-title px-2 mb-3">Navigation</p>
         )}
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+        {navItems.map(({ href, icon: Icon, label }) => {
+          const active = pathname === href || (href !== '/dashboard' && href !== '/my-attendance' && href !== '/parent-dashboard' && pathname.startsWith(href));
           return (
             <Link
               key={href}
@@ -71,7 +117,7 @@ export default function Sidebar({ collapsed: initialCollapsed = false }: Sidebar
               {active && !collapsed && (
                 <ChevronRight size={14} className="text-brand-500" />
               )}
-              {/* Tooltip for collapsed */}
+              {/* Tooltip for collapsed state */}
               {collapsed && (
                 <div className="absolute left-full ml-3 px-2 py-1 bg-surface-800 border border-white/10 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
                   {label}
@@ -84,23 +130,29 @@ export default function Sidebar({ collapsed: initialCollapsed = false }: Sidebar
 
       {/* Footer */}
       <div className={`px-3 py-4 border-t border-white/[0.06] space-y-2`}>
-        {/* User info */}
-        {!collapsed && (
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800/50">
-            <div className="avatar w-8 h-8 from-brand-500 to-violet-600 text-xs flex-shrink-0">SA</div>
-            <div className="overflow-hidden flex-1">
-              <div className="text-sm font-semibold text-white truncate">Super Admin</div>
-              <div className="text-[10px] text-slate-600 truncate">admin@okasha.edu.pk</div>
+        {/* User info + role badge */}
+        {!collapsed && session && (
+          <div className="flex items-start gap-3 px-3 py-2.5 rounded-xl bg-surface-800/50 mb-1">
+            <div className={`avatar w-8 h-8 ${avatarGradient} text-xs flex-shrink-0`}>
+              {initials}
+            </div>
+            <div className="overflow-hidden flex-1 min-w-0">
+              <div className="text-sm font-semibold text-white truncate">{session.full_name}</div>
+              <div className="text-[10px] text-slate-600 truncate">{session.email}</div>
+              <span className={`inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${badge.cls}`}>
+                <Shield size={8} />
+                {badge.label}
+              </span>
             </div>
           </div>
         )}
-        <Link
-          href="/"
-          className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 ${collapsed ? 'justify-center' : ''}`}
+        <button
+          onClick={handleLogout}
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 ${collapsed ? 'justify-center' : ''}`}
         >
           <LogOut size={16} />
           {!collapsed && 'Sign Out'}
-        </Link>
+        </button>
       </div>
     </>
   );
