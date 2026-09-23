@@ -588,7 +588,156 @@ export const demoStore = {
   getUniqueClasses(): string[] {
     return Array.from(new Set(DEMO_STUDENTS.map(s => s.class_name).filter(Boolean) as string[])).sort();
   },
+
+  // ─── User Approvals & Management ──────────────────────────────
+  async getPendingUsers(): Promise<Profile[]> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      return data || [];
+    }
+    return DEMO_PENDING_USERS.filter(u => u.status === 'pending');
+  },
+
+  async getAllUsers(): Promise<Profile[]> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      return data || [];
+    }
+    return [...DEMO_PENDING_USERS, ...DEMO_STUDENTS, ...DEMO_PARENTS];
+  },
+
+  async getPendingCount(): Promise<number> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      const { count } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      return count || 0;
+    }
+    return DEMO_PENDING_USERS.filter(u => u.status === 'pending').length;
+  },
+
+  async approveUser(userId: string, role: import('@/lib/types').UserRole): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: 'approved', role, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      return !error;
+    }
+    const idx = DEMO_PENDING_USERS.findIndex(u => u.id === userId);
+    if (idx !== -1) {
+      DEMO_PENDING_USERS[idx].status = 'approved';
+      DEMO_PENDING_USERS[idx].role = role;
+      DEMO_PENDING_USERS[idx].updated_at = new Date().toISOString();
+      return true;
+    }
+    return false;
+  },
+
+  async rejectUser(userId: string): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      return !error;
+    }
+    const idx = DEMO_PENDING_USERS.findIndex(u => u.id === userId);
+    if (idx !== -1) {
+      DEMO_PENDING_USERS[idx].status = 'rejected';
+      DEMO_PENDING_USERS[idx].updated_at = new Date().toISOString();
+      return true;
+    }
+    return false;
+  },
+
+  async updateUserRole(userId: string, role: import('@/lib/types').UserRole): Promise<boolean> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      return !error;
+    }
+    const all = [...DEMO_PENDING_USERS, ...DEMO_STUDENTS, ...DEMO_PARENTS];
+    const u = all.find(x => x.id === userId);
+    if (u) {
+      u.role = role;
+      u.updated_at = new Date().toISOString();
+      return true;
+    }
+    return false;
+  },
+
+  async registerDemoUser(data: { full_name: string; email: string; requested_role: string }): Promise<Profile> {
+    const newUser: Profile = {
+      id: `user-${Date.now()}`,
+      role: null,
+      status: 'pending',
+      requested_role: data.requested_role,
+      full_name: data.full_name,
+      email: data.email,
+      fee_status: 'unpaid',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    DEMO_PENDING_USERS.unshift(newUser);
+    return newUser;
+  },
 };
+
+export let DEMO_PENDING_USERS: Profile[] = [
+  {
+    id: 'user-pending-001',
+    role: null,
+    status: 'pending',
+    requested_role: 'student',
+    full_name: 'Bilal Tariq',
+    email: 'bilal.tariq@gmail.com',
+    phone_number: '+923001112233',
+    fee_status: 'unpaid',
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+  },
+  {
+    id: 'user-pending-002',
+    role: null,
+    status: 'pending',
+    requested_role: 'parent',
+    full_name: 'Rabia Farooq',
+    email: 'rabia.farooq@gmail.com',
+    phone_number: '+923004445566',
+    fee_status: 'paid',
+    created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 5).toISOString(),
+  },
+  {
+    id: 'user-pending-003',
+    role: null,
+    status: 'pending',
+    requested_role: 'staff',
+    full_name: 'Hamza Sheikh',
+    email: 'hamza.sheikh@okasha.edu.pk',
+    phone_number: '+923007778899',
+    fee_status: 'paid',
+    created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 12).toISOString(),
+  },
+];
 
 export function generateReceiptNumber(): string {
   const year = new Date().getFullYear();

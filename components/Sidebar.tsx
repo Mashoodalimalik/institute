@@ -5,9 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   GraduationCap, LayoutDashboard, Users, BookOpen,
   BarChart3, Settings, LogOut, Menu, X, ChevronRight,
-  UserPlus, Calendar, CreditCard, Home, Shield,
+  UserPlus, Calendar, CreditCard, Home, Shield, UserCheck,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth, getNavPermissions } from '@/lib/auth-context';
 
 // ── All possible nav items ───────────────────────────────────────
@@ -19,6 +19,7 @@ const ALL_NAV = [
   { key: 'admissions',      href: '/admissions',       icon: UserPlus,        label: 'Admissions' },
   { key: 'attendance',      href: '/attendance',       icon: BookOpen,        label: 'Attendance' },
   { key: 'ledger',          href: '/ledger',           icon: BarChart3,       label: 'Ledger' },
+  { key: 'adminUsers',      href: '/admin/users',      icon: UserCheck,       label: 'User Requests' },
   { key: 'settings',        href: '/settings',         icon: Settings,        label: 'Settings' },
   // Student
   { key: 'myAttendance',    href: '/my-attendance',    icon: Calendar,        label: 'My Attendance' },
@@ -55,11 +56,26 @@ export default function Sidebar({ collapsed: initialCollapsed = false }: Sidebar
   const { session, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const role = session?.role ?? 'staff';
   const perms = getNavPermissions(role);
   const badge = ROLE_BADGE[role];
   const avatarGradient = ROLE_AVATAR_GRADIENT[role];
+
+  useEffect(() => {
+    if (role !== 'super_admin') return;
+    const fetchPending = async () => {
+      try {
+        const res = await fetch('/api/admin/pending-count');
+        const data = await res.json();
+        if (typeof data.count === 'number') setPendingCount(data.count);
+      } catch { /* noop */ }
+    };
+    fetchPending();
+    const timer = setInterval(fetchPending, 15000);
+    return () => clearInterval(timer);
+  }, [role]);
 
   // Filter nav items to only those the role can see
   const navItems = ALL_NAV.filter(item => perms[item.key as NavKey]);
@@ -93,7 +109,7 @@ export default function Sidebar({ collapsed: initialCollapsed = false }: Sidebar
         {!collapsed && (
           <p className="section-title px-2 mb-3">Navigation</p>
         )}
-        {navItems.map(({ href, icon: Icon, label }) => {
+        {navItems.map(({ key, href, icon: Icon, label }) => {
           const active = pathname === href || (href !== '/dashboard' && href !== '/my-attendance' && href !== '/parent-dashboard' && pathname.startsWith(href));
           return (
             <Link
@@ -114,13 +130,21 @@ export default function Sidebar({ collapsed: initialCollapsed = false }: Sidebar
                 className={`flex-shrink-0 ${active ? 'text-brand-400' : 'text-slate-600 group-hover:text-slate-400'}`}
               />
               {!collapsed && <span className="flex-1">{label}</span>}
-              {active && !collapsed && (
+              {key === 'adminUsers' && pendingCount > 0 && !collapsed && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                  {pendingCount}
+                </span>
+              )}
+              {key === 'adminUsers' && pendingCount > 0 && collapsed && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 absolute top-2 right-2 ring-2 ring-surface-900 animate-pulse" />
+              )}
+              {active && !collapsed && key !== 'adminUsers' && (
                 <ChevronRight size={14} className="text-brand-500" />
               )}
               {/* Tooltip for collapsed state */}
               {collapsed && (
                 <div className="absolute left-full ml-3 px-2 py-1 bg-surface-800 border border-white/10 rounded-lg text-xs text-white whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-                  {label}
+                  {label} {key === 'adminUsers' && pendingCount > 0 ? `(${pendingCount} pending)` : ''}
                 </div>
               )}
             </Link>

@@ -3,13 +3,16 @@
 // ================================================================
 
 export type UserRole = 'super_admin' | 'staff' | 'student' | 'parent';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type FeeStatus = 'paid' | 'unpaid' | 'overdue';
 export type AttendanceType = 'check_in' | 'check_out';
 export type TransactionType = 'income' | 'expense';
 
 export interface Profile {
   id: string;
-  role: UserRole;
+  role: UserRole | null;
+  status?: ApprovalStatus;
+  requested_role?: string;
   full_name: string;
   email?: string;
   phone_number?: string;

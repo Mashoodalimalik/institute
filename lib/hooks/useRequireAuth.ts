@@ -29,9 +29,19 @@ export function useRequireAuth(allowedRoles?: UserRole[]) {
       return;
     }
 
-    if (allowedRoles && !allowedRoles.includes(session.role)) {
+    if (session.status === 'pending') {
+      router.replace('/pending');
+      return;
+    }
+
+    if (session.status === 'rejected') {
+      router.replace('/rejected');
+      return;
+    }
+
+    if (allowedRoles && (!session.role || !allowedRoles.includes(session.role))) {
       // Wrong role → send to their correct home
-      router.replace(getRoleHomePath(session.role));
+      router.replace(getRoleHomePath(session.role, session.status));
     }
   }, [session, isLoading, allowedRoles, router]);
 

@@ -2,9 +2,16 @@ OKASHA INSTITUTE MANAGEMENT SYSTEM — FEATURE REFERENCE
 =======================================================
 
 LOGIN & AUTHENTICATION
-- Multi-role login page with quick-login demo pills for Super Admin, Staff, Student, and Parent.
-- Session is stored in localStorage so it survives page refresh and is only cleared on logout.
-- Each role is automatically redirected to their designated home page immediately after login.
+- Individual login support with either Gmail (Google OAuth) or personal email and password.
+- Multi-role login page with Sign In and Sign Up tabs plus quick-login demo pills for Super Admin, Staff, Student, and Parent.
+- New user registration flow with self-reported designation request (Student, Parent, or Staff Member).
+- Automatic pending security holding screen (/pending) preventing unapproved users from accessing institute resources.
+- Rejection holding screen (/rejected) providing direct administrative contact details for denied registrations.
+- Super Admin User Requests dashboard (/admin/users) for reviewing pending sign-ups and assigning approved designations.
+- Live badge on sidebar navigation showing the real-time count of pending user approval requests to the Super Admin.
+- Full role management tab in admin panel allowing Super Admin to search, filter, and change user designations dynamically.
+- Session is stored in Supabase / localStorage so it survives page refresh and is only cleared on logout.
+- Each approved role is automatically redirected to their designated home page immediately after login.
 - Super Admin and Staff go to /dashboard, Students go to /my-attendance, Parents go to /parent-dashboard.
 - Any user who manually visits a URL they are not allowed to see is instantly redirected to their correct home.
 

@@ -13,13 +13,16 @@ CREATE TYPE user_role AS ENUM ('super_admin', 'staff', 'student', 'parent');
 CREATE TYPE fee_status AS ENUM ('paid', 'unpaid', 'overdue');
 CREATE TYPE attendance_type AS ENUM ('check_in', 'check_out');
 CREATE TYPE transaction_type AS ENUM ('income', 'expense');
+CREATE TYPE approval_status AS ENUM ('pending', 'approved', 'rejected');
 
 -- ========================
 -- TABLE: profiles
 -- ========================
 CREATE TABLE IF NOT EXISTS profiles (
   id              UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  role            user_role NOT NULL DEFAULT 'student',
+  role            user_role,                          -- NULL until admin assigns
+  status          approval_status NOT NULL DEFAULT 'pending',
+  requested_role  TEXT,                               -- self-reported at signup
   full_name       TEXT NOT NULL,
   email           TEXT,
   phone_number    TEXT,
@@ -135,12 +138,14 @@ CREATE TRIGGER trg_profiles_updated_at
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
+  INSERT INTO public.profiles (id, email, full_name, role, status, requested_role)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'student')
+    NULL,                                              -- role assigned by admin
+    'pending',                                         -- must be approved first
+    COALESCE(NEW.raw_user_meta_data->>'requested_role', 'student')
   );
   RETURN NEW;
 END;
@@ -149,6 +154,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+
+-- ========================
+-- MIGRATION: run if table already exists
+-- ========================
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS status approval_status NOT NULL DEFAULT 'pending';
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS requested_role TEXT;
+-- ALTER TABLE profiles ALTER COLUMN role DROP NOT NULL;
+-- UPDATE profiles SET status = 'approved' WHERE role IS NOT NULL;  -- approve existing users
+-- UPDATE profiles SET role = NULL WHERE role = 'student' AND status = 'pending'; -- optional cleanup
 
 -- ========================
 -- ROW-LEVEL SECURITY (RLS)
