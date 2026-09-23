@@ -3,25 +3,35 @@ OKASHA INSTITUTE MANAGEMENT SYSTEM — FEATURE REFERENCE
 
 LOGIN & AUTHENTICATION
 - Individual login support with either Gmail (Google OAuth) or personal email and password.
-- Multi-role login page with Sign In and Sign Up tabs plus quick-login demo pills for Super Admin, Staff, Student, and Parent.
+- Multi-role login page with dedicated "Sign In" and "Register / Sign Up" tabs.
+- Quick-login demo pills for instant testing as Super Admin, Staff, Student, or Parent.
 - New user registration flow with self-reported designation request (Student, Parent, or Staff Member).
 - Automatic pending security holding screen (/pending) preventing unapproved users from accessing institute resources.
+- Live status verification button on the pending screen allowing users to re-check their approval without re-logging in.
 - Rejection holding screen (/rejected) providing direct administrative contact details for denied registrations.
 - Super Admin User Requests dashboard (/admin/users) for reviewing pending sign-ups and assigning approved designations.
 - Live badge on sidebar navigation showing the real-time count of pending user approval requests to the Super Admin.
-- Full role management tab in admin panel allowing Super Admin to search, filter, and change user designations dynamically.
-- Session is stored in Supabase / localStorage so it survives page refresh and is only cleared on logout.
+- Dedicated user management tab in admin panel allowing Super Admin to search, filter, and change user designations dynamically.
+- Session is stored in Supabase (@supabase/ssr cookies) and localStorage so it survives page refresh and is only cleared on logout.
 - Each approved role is automatically redirected to their designated home page immediately after login.
 - Super Admin and Staff go to /dashboard, Students go to /my-attendance, Parents go to /parent-dashboard.
 - Any user who manually visits a URL they are not allowed to see is instantly redirected to their correct home.
 
 ROLE-BASED ACCESS CONTROL (RBAC)
-- Super Admin has full access to every page and feature in the system.
+- Super Admin has full access to every page, feature, user approval, and financial ledger in the system.
 - Staff can access Dashboard, Students, Admissions, and Attendance but cannot see Ledger, Settings, or financial stats.
 - Student can only see their own attendance history and their own fee receipts — no other student data is visible.
 - Parent can only see their linked children's attendance and fee status — no financial management tools.
 - The sidebar navigation dynamically shows only the pages permitted for the logged-in role.
 - A colour-coded role badge (Super Admin=indigo, Staff=violet, Student=green, Parent=amber) is displayed in the sidebar.
+
+SUPER ADMIN USER MANAGEMENT (/admin/users)
+- Dedicated Pending Requests tab displaying all incoming user sign-ups with name, email, avatar, and requested designation.
+- Instant role assignment dropdown allowing the Super Admin to grant access as Student, Staff Member, Parent, or Super Admin.
+- One-click approval button that immediately updates user status to approved and unlocks their designated portal.
+- Rejection button allowing the Super Admin to decline unauthorized registration requests.
+- All Users tab providing a searchable, filterable directory of every registered user across the institute.
+- Quick role re-assignment dropdown on any user row to upgrade, downgrade, or change permissions at any time.
 
 DASHBOARD (Super Admin & Staff)
 - Displays total students enrolled, paid count, unpaid count, and overdue count as stat cards.
@@ -94,12 +104,16 @@ PDF RECEIPTS
 - The receipt is available for immediate download from the profile modal after payment.
 - Receipt is optionally sent to the parent's WhatsApp if the notification channel is enabled.
 
-TECHNOLOGY STACK
-- Built with Next.js 14 (App Router), TypeScript, and Tailwind CSS.
-- Auth context uses React Context + localStorage for persistent, refresh-safe sessions.
-- Demo mode works fully offline with in-memory data — no database required to run.
+TECHNOLOGY STACK & API ARCHITECTURE
+- Built with Next.js 14 (App Router), TypeScript, and Vanilla CSS with Tailwind design tokens.
+- Authentication utilizes Supabase Auth (@supabase/ssr cookies) with full fallback to localStorage for offline demo mode.
+- OAuth exchange endpoint (/auth/callback) handles Google / Gmail authorization redirects.
+- Admin user approval API (/api/admin/approve-user) executes role and approval status modifications.
+- Live badge polling endpoint (/api/admin/pending-count) serves the pending requests count to the sidebar navigation.
+- Biometric webhook endpoint (/api/attendance/push) receives live scan events from ZKTeco devices.
+- Scanner enrollment endpoint (/api/zkt/enroll) sends push commands to trigger biometric capture on physical devices.
+- Demo mode works fully offline with in-memory data — no external database required to test.
 - Supabase (PostgreSQL) is supported as the live database by setting credentials in .env.local.
-- ZKTeco ADMS/WDMS biometric integration via HTTP push webhooks and enrollment commands.
 - Twilio used for SMS and WhatsApp notification delivery.
 - PDF receipts generated server-side using react-pdf/renderer.
 - Progressive Web App (PWA) — installable on mobile and desktop with offline support.
