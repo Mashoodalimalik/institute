@@ -1,5 +1,7 @@
 # Okasha Institute
 
+See [WORK_COMPLETED.md](WORK_COMPLETED.md) for the completed changes, verification results and remaining work.
+
 Next.js 15, React 19 and Supabase institute management, with a separate local backend and combined K40/WhatsApp bridge. The backend requires Node.js 24+. The Windows bridge includes its own Python and Node runtimes.
 
 ## Run locally
