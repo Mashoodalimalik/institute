@@ -5,7 +5,7 @@ import {
   X, User, Phone, Fingerprint, CreditCard, Calendar,
   Clock, CheckCircle, AlertTriangle, XCircle, Download,
   Loader2, ChevronDown, MessageSquare, Edit3, Save, Plus,
-  Radio, Wifi, WifiOff, ScanLine,
+  Radio, Wifi, WifiOff, ScanLine, Trash2
 } from 'lucide-react';
 import { Profile, AttendanceRecord, Receipt, PaymentMethod, PAYMENT_METHODS } from '@/lib/types';
 import { demoStore } from '@/lib/services/store';
@@ -205,6 +205,24 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
     }
   }
 
+  const handleDeleteStudent = async () => {
+    if (!student) return;
+    if (!confirm('Are you sure you want to completely delete this student and all their attendance/fee records? This cannot be undone.')) return;
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: student.id, type: 'student' })
+      });
+      if (!res.ok) throw new Error('Failed to delete student');
+      alert('Student deleted successfully.');
+      if (onFeeCollected) onFeeCollected(); // Refreshes the list in parent
+      onClose();
+    } catch (err: any) {
+      alert(err.message || 'Error deleting student.');
+    }
+  };
+
   const TABS: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
     { id: 'info',       label: 'Profile',    icon: <User size={14} /> },
     { id: 'attendance', label: 'Attendance', icon: <Calendar size={14} /> },
@@ -253,9 +271,16 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
               )}
             </div>
           </div>
-          <button onClick={onClose} className="btn-icon" id="modal-close-btn">
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {canEnroll && (
+              <button onClick={handleDeleteStudent} className="p-2 rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors" title="Delete Student">
+                <Trash2 size={18} />
+              </button>
+            )}
+            <button onClick={onClose} className="btn-icon" id="modal-close-btn">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}

@@ -5,7 +5,7 @@ import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import {
   UserCheck, Shield, Clock, CheckCircle2, XCircle, Search,
-  RefreshCw, AlertCircle, ArrowRight, UserPlus, Filter, ShieldAlert
+  RefreshCw, AlertCircle, ArrowRight, UserPlus, Filter, ShieldAlert, Trash2, Loader2
 } from 'lucide-react';
 import { Profile, UserRole } from '@/lib/types';
 import { demoStore } from '@/lib/services/store';
@@ -121,6 +121,30 @@ export default function AdminUsersPage() {
       }
     } catch {
       setFeedback({ type: 'error', message: 'Error updating user role.' });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, authUserId?: string | null) => {
+    if (!confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')) return;
+    setProcessingId(userId);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, type: 'user', authUserId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFeedback({ type: 'success', message: 'User deleted successfully.' });
+        await loadData();
+      } else {
+        setFeedback({ type: 'error', message: data.error || 'Failed to delete user.' });
+      }
+    } catch {
+      setFeedback({ type: 'error', message: 'Error deleting user.' });
     } finally {
       setProcessingId(null);
     }
@@ -370,6 +394,7 @@ export default function AdminUsersPage() {
                         <th className="py-3 px-4">Status</th>
                         <th className="py-3 px-4">Registered</th>
                         <th className="py-3 px-4 text-right">Change Role</th>
+                        <th className="py-3 px-4 text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.04]">
@@ -434,6 +459,16 @@ export default function AdminUsersPage() {
                                     </option>
                                   ))}
                                 </select>
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                <button
+                                  onClick={() => handleDeleteUser(user.id, user.auth_user_id)}
+                                  disabled={processingId === user.id}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Delete User"
+                                >
+                                  {processingId === user.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                </button>
                               </td>
                             </tr>
                           );

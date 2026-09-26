@@ -720,6 +720,39 @@ return {
     return false;
   },
 
+  async deleteStudent(studentId: string): Promise<void> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      // Delete cascade: attendance, receipts, ledger entries, then the profile row
+      await supabase.from('attendance').delete().eq('student_id', studentId);
+      await supabase.from('receipts').delete().eq('student_id', studentId);
+      await supabase.from('fee_ledger').delete().eq('student_id', studentId);
+      const { error } = await supabase.from('profiles').delete().eq('id', studentId);
+      if (error) throw error;
+      return;
+    }
+    // Demo mode: remove from in-memory array
+    const idx = DEMO_STUDENTS.findIndex(s => s.id === studentId);
+    if (idx !== -1) DEMO_STUDENTS.splice(idx, 1);
+  },
+
+  async deleteUser(profileId: string): Promise<void> {
+    if (isSupabaseConfigured) {
+      const supabase = getSupabaseClient();
+      // Nullify parent_id links on child students before deleting parent profile
+      await supabase.from('profiles').update({ parent_id: null }).eq('parent_id', profileId);
+      const { error } = await supabase.from('profiles').delete().eq('id', profileId);
+      if (error) throw error;
+      return;
+    }
+    // Demo mode
+    const all = [DEMO_PENDING_USERS, DEMO_STUDENTS, DEMO_PARENTS];
+    for (const arr of all) {
+      const idx = arr.findIndex(u => u.id === profileId);
+      if (idx !== -1) { arr.splice(idx, 1); return; }
+    }
+  },
+
   async registerDemoUser(data: { full_name: string; email: string; requested_role: string }): Promise<Profile> {
     const newUser: Profile = {
       id: `user-${Date.now()}`,
