@@ -10,6 +10,7 @@ export type TransactionType = 'income' | 'expense';
 
 export interface Profile {
   id: string;
+  auth_user_id?: string;
   role: UserRole | null;
   status?: ApprovalStatus;
   requested_role?: string;
