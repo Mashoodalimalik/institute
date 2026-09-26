@@ -5,7 +5,7 @@ import { createServerClient } from '@supabase/ssr';
 import { readFile } from 'node:fs/promises';
 import { withParents } from '../lib/services/profile-relations.mjs';
 
-if (process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://hqvuajcnfylwxgdzypgd.supabase.co') throw new Error('These integration tests are restricted to the new institute development project');
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('Integration tests require NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const db = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });

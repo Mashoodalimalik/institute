@@ -10,6 +10,7 @@ import {
 import { Profile, AttendanceRecord, Receipt, PaymentMethod, PAYMENT_METHODS } from '@/lib/types';
 import { demoStore } from '@/lib/services/store';
 import { useAuth } from '@/lib/auth-context';
+import SendMessageModal from '@/components/SendMessageModal';
 
 interface ProfileModalProps {
   studentId: string;
@@ -37,6 +38,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Profile>>({});
+  const [showMessageModal, setShowMessageModal] = useState(false);
 
   // Enrollment state
   const [enrollBiometricId, setEnrollBiometricId] = useState('');
@@ -366,10 +368,12 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                           <div className="flex items-center gap-2">
                             <div className="text-sm text-slate-300">{student.parent.phone_number}</div>
                             <button
+                              type="button"
+                              onClick={() => setShowMessageModal(true)}
                               className="btn btn-secondary btn-sm"
-                              title="Send WhatsApp"
+                              title="Send WhatsApp Message"
                             >
-                              <MessageSquare size={12} />
+                              <MessageSquare size={12} className="text-emerald-400" />
                             </button>
                           </div>
                         </div>
@@ -693,6 +697,15 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
           )}
         </div>
       </div>
+
+      {showMessageModal && student && (
+        <SendMessageModal
+          student={student}
+          recipientName={student.parent?.full_name || student.full_name}
+          recipientPhone={student.parent?.phone_number || student.phone_number || ''}
+          onClose={() => setShowMessageModal(false)}
+        />
+      )}
     </div>
   );
 }

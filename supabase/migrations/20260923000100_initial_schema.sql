@@ -5,6 +5,7 @@
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ========================
 -- ENUMS
@@ -42,7 +43,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- TABLE: attendance
 -- ========================
 CREATE TABLE IF NOT EXISTS attendance (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id  UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   timestamp   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   type        attendance_type NOT NULL,
@@ -54,7 +55,7 @@ CREATE TABLE IF NOT EXISTS attendance (
 -- TABLE: ledger
 -- ========================
 CREATE TABLE IF NOT EXISTS ledger (
-  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id       UUID REFERENCES profiles(id) ON DELETE SET NULL,
   amount           NUMERIC(10,2) NOT NULL,
   transaction_type transaction_type NOT NULL,
@@ -70,7 +71,7 @@ CREATE TABLE IF NOT EXISTS ledger (
 -- TABLE: fee_settings
 -- ========================
 CREATE TABLE IF NOT EXISTS fee_settings (
-  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   universal_due_day     INTEGER NOT NULL DEFAULT 5 CHECK (universal_due_day BETWEEN 1 AND 31),
   grace_period_days     INTEGER NOT NULL DEFAULT 3,
   late_fee_amount       NUMERIC(10,2) NOT NULL DEFAULT 0,
@@ -88,13 +89,13 @@ CREATE TABLE IF NOT EXISTS fee_settings (
 );
 
 -- Insert default fee_settings row
-INSERT INTO fee_settings (id) VALUES (uuid_generate_v4()) ON CONFLICT DO NOTHING;
+INSERT INTO fee_settings (id) VALUES (gen_random_uuid()) ON CONFLICT DO NOTHING;
 
 -- ========================
 -- TABLE: receipts
 -- ========================
 CREATE TABLE IF NOT EXISTS receipts (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id     UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   ledger_id      UUID REFERENCES ledger(id) ON DELETE SET NULL,
   receipt_number TEXT UNIQUE NOT NULL,
