@@ -39,3 +39,5 @@ public/downloads/*.exe
 bridge/hardware/.pytest_cache/
 public/workbox-*.js
 public/worker-*.js
+.vercel
+.env*
