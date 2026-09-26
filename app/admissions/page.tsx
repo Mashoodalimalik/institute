@@ -19,6 +19,8 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
+  ScanLine,
+  Loader2,
 } from 'lucide-react';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 
@@ -41,6 +43,12 @@ export default function AdmissionsPage() {
   const [monthlyFee, setMonthlyFee] = useState('5000');
   const [rfidTag, setRfidTag] = useState('');
   const [biometricId, setBiometricId] = useState('');
+
+  // Biometric scan after admission
+  const [enrolledStudentId, setEnrolledStudentId] = useState('');
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanStatus, setScanStatus] = useState<'idle' | 'waiting' | 'success' | 'error'>('idle');
+  const [scanMsg, setScanMsg] = useState('');
 
   // New Parent Fields
   const [parentName, setParentName] = useState('');
@@ -106,7 +114,10 @@ export default function AdmissionsPage() {
       });
 
       setSuccessMsg(`Student "${newStudent.full_name}" admitted successfully! ID: ${newStudent.id}`);
-      
+      setEnrolledStudentId(newStudent.id);
+      setScanStatus('idle');
+      setScanMsg('');
+
       // Refresh list
       await loadData();
 
@@ -127,6 +138,45 @@ export default function AdmissionsPage() {
 
   const recentAdmissions = [...students].reverse().slice(0, 6);
 
+  async function handleScanFingerprint() {
+    if (!enrolledStudentId) return;
+    setScanLoading(true);
+    setScanStatus('waiting');
+    setScanMsg('Sending fingerprint enrollment command to ZKTeco K40 scanner…');
+    try {
+      const resp = await fetch('/api/zkt/enroll', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: enrolledStudentId, enrollType: 'fingerprint', requestId: crypto.randomUUID() }),
+      });
+      const data = await resp.json();
+      if (data.pending || data.success) {
+        setScanMsg(data.message || 'Follow the K40 prompts to place your finger…');
+        if (data.pending) {
+          const deadline = Date.now() + 60000;
+          let complete = false;
+          while (Date.now() < deadline) {
+            await new Promise(r => setTimeout(r, 1000));
+            const check = await fetch(`/api/zkt/enroll?commandId=${encodeURIComponent(data.commandId)}`);
+            const result = await check.json();
+            if (!check.ok) throw new Error(result.error);
+            if (result.state === 'succeeded') { setScanStatus('success'); setScanMsg('✅ Fingerprint enrolled and verified on the K40 scanner!'); complete = true; break; }
+            if (!['queued', 'running'].includes(result.state)) throw new Error(result.error?.message || `Enrollment ${result.state}. Try again.`);
+          }
+          if (!complete) throw new Error('Enrollment timed out. Try again when the K40 is available.');
+        } else setScanStatus('success');
+      } else {
+        setScanStatus('error');
+        setScanMsg(data.error || 'Could not contact K40 scanner. Ensure the bridge is running.');
+      }
+    } catch (err: any) {
+      setScanStatus('error');
+      setScanMsg(err.message || 'Scanner not reachable');
+    } finally {
+      setScanLoading(false);
+    }
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-surface-950 text-slate-100">
       <Sidebar />
@@ -146,7 +196,7 @@ export default function AdmissionsPage() {
                 New Student Registration
               </h1>
               <p className="text-sm text-slate-400">
-                Enroll new students, assign biometric tags & linking parent accounts.
+                Enroll new students, assign biometric tags & link parent accounts.
               </p>
             </div>
 
@@ -275,7 +325,7 @@ export default function AdmissionsPage() {
                     </div>
                     <div>
                       <h2 className="text-base font-semibold text-white">Biometric & Smart Credentials</h2>
-                      <p className="text-xs text-slate-400">RFID tag card and Biometric scanner mapping</p>
+                      <p className="text-xs text-slate-400">RFID tag card and K40 biometric scanner mapping</p>
                     </div>
                   </div>
 
@@ -295,7 +345,7 @@ export default function AdmissionsPage() {
 
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5 flex items-center gap-1.5">
-                        <Fingerprint size={14} className="text-violet-400" /> Biometric ID
+                        <Fingerprint size={14} className="text-violet-400" /> K40 Biometric User ID
                       </label>
                       <input
                         type="text"
@@ -306,6 +356,35 @@ export default function AdmissionsPage() {
                       />
                     </div>
                   </div>
+
+                  {/* Fingerprint Scan Button — appears after student is saved */}
+                  {enrolledStudentId && (
+                    <div className="pt-3 border-t border-white/[0.06] space-y-3">
+                      <p className="text-xs text-slate-400">Student saved. You can now enroll their fingerprint on the K40 biometric scanner.</p>
+                      <button
+                        type="button"
+                        onClick={handleScanFingerprint}
+                        disabled={scanLoading || scanStatus === 'success'}
+                        className="w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all shadow-lg"
+                      >
+                        {scanLoading ? (
+                          <><Loader2 size={17} className="animate-spin" /> Waiting for fingerprint scan…</>
+                        ) : scanStatus === 'success' ? (
+                          <><CheckCircle2 size={17} className="text-emerald-300" /> Fingerprint Enrolled Successfully!</>
+                        ) : (
+                          <><ScanLine size={17} /> Scan Fingerprint on K40
+                          <span className="ml-auto text-violet-300 text-xs font-normal">Place finger on scanner</span></>
+                        )}
+                      </button>
+                      {scanMsg && (
+                        <p className={`text-xs px-3 py-2 rounded-lg ${
+                          scanStatus === 'success' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                          : scanStatus === 'error' ? 'bg-red-500/10 text-red-300 border border-red-500/20'
+                          : 'bg-violet-500/10 text-violet-300 border border-violet-500/20'
+                        }`}>{scanMsg}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Card 3: Parent / Guardian Details */}

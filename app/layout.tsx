@@ -4,11 +4,11 @@ import { AuthProvider } from '@/lib/auth-context';
 import ServiceWorker from '@/components/ServiceWorker';
 
 export const metadata: Metadata = {
-  title: 'Okasha Institute — Management System',
+  title: 'The Prism Coaching Center — Management System',
   description:
-    'Comprehensive institute management platform for Okasha Institute — student fee management, attendance tracking, financial ledger, and automated notifications.',
-  keywords: 'institute management, fee tracking, attendance, student portal, Okasha Institute',
-  authors: [{ name: 'Okasha Institute' }],
+    'Comprehensive institute management platform for The Prism Coaching Center — student fee management, attendance tracking, financial ledger, and automated notifications.',
+  keywords: 'institute management, fee tracking, attendance, student portal, The Prism Coaching Center',
+  authors: [{ name: 'The Prism Coaching Center' }],
   manifest: '/manifest.json',
   icons: {
     icon: '/icons/icon-192.png',
@@ -17,10 +17,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Okasha Institute',
+    title: 'Prism Coaching',
   },
   openGraph: {
-    title: 'Okasha Institute Management System',
+    title: 'The Prism Coaching Center — Management System',
     description: 'Student fee management, attendance tracking & financial ledger.',
     type: 'website',
   },

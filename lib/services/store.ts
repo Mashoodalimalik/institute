@@ -176,7 +176,7 @@ export const DEMO_FEE_SETTINGS: FeeSettings = {
   reminder_interval_days: 3,
   notify_sms: true,
   notify_whatsapp: true,
-  institute_name: 'Okasha Institute',
+  institute_name: 'The Prism Coaching Center',
   updated_at: new Date().toISOString(),
 };
 

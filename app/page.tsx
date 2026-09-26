@@ -232,7 +232,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-violet-500 flex items-center justify-center shadow-glow-brand">
               <GraduationCap size={22} className="text-white" />
             </div>
-            <span className="text-xl font-bold text-white">Okasha Institute</span>
+            <span className="text-xl font-bold text-white">The Prism Coaching Center</span>
           </div>
 
           <div>
@@ -270,7 +270,7 @@ export default function LoginPage() {
             <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
               <GraduationCap size={18} className="text-white" />
             </div>
-            <span className="font-bold text-white">Okasha Institute</span>
+            <span className="font-bold text-white">The Prism Coaching Center</span>
           </div>
 
           {/* Mode Switcher Tabs */}
@@ -484,7 +484,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-[11px] text-slate-600 mt-6">
-            Okasha Institute Management System — v2.0<br />
+            The Prism Coaching Center — Management System v2.0<br />
             <span className="text-slate-700">Protected by Super Admin RBAC & Biometrics</span>
           </p>
         </div>

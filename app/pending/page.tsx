@@ -48,7 +48,7 @@ export default function PendingPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center shadow-glow-brand">
             <GraduationCap size={22} className="text-white" />
           </div>
-          <span className="text-xl font-bold text-white">Okasha Institute</span>
+          <span className="text-xl font-bold text-white">The Prism Coaching Center</span>
         </div>
 
         {/* Card */}

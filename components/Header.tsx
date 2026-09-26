@@ -11,7 +11,7 @@ interface HeaderProps {
   searchPlaceholder?: string;
 }
 
-export default function Header({ title = 'Okasha Institute', subtitle, actions, onSearch, searchPlaceholder }: HeaderProps) {
+export default function Header({ title = 'The Prism Coaching Center', subtitle, actions, onSearch, searchPlaceholder }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 bg-surface-950/80 backdrop-blur-sm border-b border-white/[0.05] px-6 py-4">
       <div className="flex items-center gap-4">

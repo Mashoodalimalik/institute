@@ -24,7 +24,7 @@ export default function RejectedPage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 flex items-center justify-center shadow-glow-brand">
             <GraduationCap size={22} className="text-white" />
           </div>
-          <span className="text-xl font-bold text-white">Okasha Institute</span>
+          <span className="text-xl font-bold text-white">The Prism Coaching Center</span>
         </div>
 
         {/* Card */}
@@ -51,9 +51,9 @@ export default function RejectedPage() {
               Need help or believe this is an error?
             </div>
             <p className="text-slate-400">
-              Please contact the Okasha Institute administration desk at{' '}
-              <a href="mailto:admin@okasha.edu.pk" className="text-brand-300 underline">
-                admin@okasha.edu.pk
+              Please contact The Prism Coaching Center administration desk at{' '}
+              <a href="mailto:admin@prismcoaching.edu.pk" className="text-brand-300 underline">
+                admin@prismcoaching.edu.pk
               </a>{' '}
               or visit the institute admission office.
             </p>

@@ -121,7 +121,7 @@ export default function SendMessageModal({
       '{{fee_amount}}': (student?.monthly_fee || 5000).toLocaleString('en-PK'),
       '{{time}}': timeStr,
       '{{date}}': dateStr,
-      '{{institute_name}}': 'Okasha Institute',
+      '{{institute_name}}': 'The Prism Coaching Center',
     };
   }, [student, recipientName]);
 

@@ -206,7 +206,7 @@ export default function Sidebar({ collapsed: initialCollapsed = false }: Sidebar
           <div className="w-7 h-7 rounded-lg bg-gradient-brand flex items-center justify-center">
             <GraduationCap size={16} className="text-white" />
           </div>
-          <span className="font-bold text-white text-sm">Okasha Institute</span>
+          <span className="font-bold text-white text-sm">The Prism Coaching Center</span>
         </div>
         <button onClick={() => setMobileOpen(!mobileOpen)} className="btn-icon">
           {mobileOpen ? <X size={18} /> : <Menu size={18} />}
