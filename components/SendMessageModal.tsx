@@ -6,6 +6,7 @@ import {
   Loader2, Copy, Sparkles, RefreshCw, BookmarkPlus, Trash2
 } from 'lucide-react';
 import { Profile } from '@/lib/types';
+import { sendWhatsAppMessageDirect, checkOnDeviceBridge } from '@/lib/client-bridge';
 
 export interface MessageTemplate {
   id: string;
@@ -88,6 +89,11 @@ export default function SendMessageModal({
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [newTemplateTitle, setNewTemplateTitle] = useState('');
   const [showSaveCustom, setShowSaveCustom] = useState(false);
+  const [onDevice, setOnDevice] = useState(false);
+
+  useEffect(() => {
+    checkOnDeviceBridge().then(setOnDevice);
+  }, []);
 
   // Load custom templates from localStorage
   useEffect(() => {
@@ -191,25 +197,18 @@ export default function SendMessageModal({
     setStatus(null);
 
     try {
-      const res = await fetch('/api/notifications/send-whatsapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: phone.trim(),
-          custom_message: message.trim(),
-        }),
+      const data = await sendWhatsAppMessageDirect({
+        phone: phone.trim(),
+        message: message.trim(),
       });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to dispatch WhatsApp message.');
-      }
 
       setStatus({
         type: 'success',
-        message: `WhatsApp message successfully sent! Message ID: ${data.sid || 'Confirmed'}`,
+        message: data.onDevice
+          ? `WhatsApp message sent directly via On-Device Bridge! ID: ${data.sid || 'Confirmed'}`
+          : `WhatsApp message successfully dispatched! ID: ${data.sid || 'Confirmed'}`,
       });
-      if (onSent) onSent(data.sid);
+      if (onSent && data.sid) onSent(data.sid);
     } catch (err: any) {
       setStatus({
         type: 'error',
@@ -232,6 +231,12 @@ export default function SendMessageModal({
             <div>
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 WhatsApp Messenger & Templates
+                {onDevice && (
+                  <span className="text-[10px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full px-2 py-0.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    On-Device Bridge
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-slate-400">
                 Send templated or customized messages directly to parents/students

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, MessageCircle, RefreshCw } from 'lucide-react';
-import type { WhatsAppSession } from '@/lib/bridge';
+import { fetchWhatsAppSession, executeWhatsAppAction, ClientWhatsAppSession } from '@/lib/client-bridge';
 
 const labels: Record<string, string> = {
   disconnected: 'Disconnected', connecting: 'Connecting…', qr: 'Ready to scan',
@@ -11,7 +11,7 @@ const labels: Record<string, string> = {
 };
 
 export default function WhatsAppConnection() {
-  const [session, setSession] = useState<WhatsAppSession>();
+  const [session, setSession] = useState<ClientWhatsAppSession>();
   const [serviceError, setServiceError] = useState('');
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,25 +21,24 @@ export default function WhatsAppConnection() {
 
   useEffect(() => {
     if (busy) return;
-    const controller = new AbortController();
+    let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+
     async function poll() {
       try {
-        const response = await fetch('/api/whatsapp/session', { cache: 'no-store', signal: controller.signal });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Could not check WhatsApp');
-        if (!controller.signal.aborted) { setSession(data); setServiceError(''); }
+        const data = await fetchWhatsAppSession();
+        if (!cancelled) { setSession(data); setServiceError(''); }
       } catch (error) {
-        if (!controller.signal.aborted) {
+        if (!cancelled) {
           setSession(undefined); // Never leave a stale QR or Connected badge on screen.
           setServiceError(error instanceof Error ? error.message : 'WhatsApp service unavailable');
         }
       } finally {
-        if (!controller.signal.aborted) timer = setTimeout(poll, 3000);
+        if (!cancelled) timer = setTimeout(poll, 3000);
       }
     }
     void poll();
-    return () => { controller.abort(); clearTimeout(timer); };
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [busy, refresh]);
 
   useEffect(() => {
@@ -50,17 +49,14 @@ export default function WhatsAppConnection() {
   async function act(action: 'connect' | 'disconnect' | 'unlink' | 'refresh') {
     setBusy(true); setActionError(''); setConfirmUnlink(false);
     try {
-      for (const step of action === 'refresh' ? ['disconnect', 'connect'] : [action]) {
-        const response = await fetch('/api/whatsapp/session', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: step, requestId: crypto.randomUUID() }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Could not update WhatsApp');
-        setSession(data); setServiceError('');
-      }
-    } catch (error) { setActionError(error instanceof Error ? error.message : 'Could not update WhatsApp'); }
-    finally { setBusy(false); }
+      const updated = await executeWhatsAppAction(action);
+      setSession(updated);
+      setServiceError('');
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not update WhatsApp');
+    } finally {
+      setBusy(false);
+    }
   }
 
   const connected = session?.connection === 'connected';
@@ -70,9 +66,17 @@ export default function WhatsAppConnection() {
   return <section className="card p-6 space-y-4" aria-labelledby="whatsapp-heading">
     <div className="flex items-center justify-between gap-3">
       <h2 id="whatsapp-heading" className="font-bold text-white flex items-center gap-2"><MessageCircle size={20} className="text-emerald-400" /> WhatsApp</h2>
-      <span role="status" className={`text-xs rounded-full px-3 py-1 ${connected ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700/50 text-slate-300'}`}>
-        {serviceError ? 'Service unavailable' : session ? labels[session.connection] || 'Checking connection' : 'Checking…'}
-      </span>
+      <div className="flex items-center gap-2">
+        {session?.onDevice && (
+          <span className="text-[11px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-full px-2.5 py-0.5 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+            On-Device Bridge
+          </span>
+        )}
+        <span role="status" className={`text-xs rounded-full px-3 py-1 ${connected ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-700/50 text-slate-300'}`}>
+          {serviceError ? 'Service unavailable' : session ? labels[session.connection] || 'Checking connection' : 'Checking…'}
+        </span>
+      </div>
     </div>
     <p className="text-sm text-slate-400">Link the institute’s WhatsApp account for fee reminders, receipts and attendance alerts.</p>
     {serviceError && <div role="alert" className="text-sm text-amber-300 space-y-2"><p>{serviceError}</p><button className="btn-secondary text-xs" onClick={() => setRefresh(value => value + 1)}>Retry connection</button></div>}

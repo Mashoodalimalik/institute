@@ -121,8 +121,8 @@ export class LocalBackend {
   async close() {await Promise.allSettled([...this.tails.values()]);}
 }
 
-export function createLocalBackendServer({token,backend,health}) {
-  return jsonServer({token,handler:async({method,url,body})=>{
+export function createLocalBackendServer({token,backend,health,allowedOrigins=['*']}) {
+  return jsonServer({token,allowedOrigins,handler:async({method,url,body})=>{
     if(method==='GET' && url.pathname==='/v1/status')return {status:200,body:await health()};
     if(method==='GET' && url.pathname==='/v1/hardware/config')return {status:200,body:backend.configuration()};
     if(method==='POST' && url.pathname==='/v1/hardware/config')return {status:200,body:backend.saveConfiguration(body)};
