@@ -57,13 +57,13 @@ export async function getBridgeCredentials(): Promise<BridgeCredentials> {
     console.warn('[ClientBridge] Could not fetch server bridge tokens:', err);
   }
 
-  // Fallback defaults for local testing
+  // Fallback defaults for local on-device bridge
   return {
     backendUrl: 'http://127.0.0.1:14310',
-    backendToken: '',
+    backendToken: process.env.NEXT_PUBLIC_LOCAL_BACKEND_TOKEN || 'e71553fabd7d20fbfd13b11ccd2f22d5e29dad2559ea6bfd6a0afe7c6c4072d1',
     bridgeWhatsAppUrl: 'http://127.0.0.1:14320',
     bridgeHardwareUrl: 'http://127.0.0.1:14318',
-    bridgeToken: '',
+    bridgeToken: process.env.NEXT_PUBLIC_LOCAL_BRIDGE_TOKEN || '6c27c9c7c16a8ef09325648bdb611b488d085f68abe584f4e846453ed985e0c9',
   };
 }
 

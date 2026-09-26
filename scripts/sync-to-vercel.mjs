@@ -41,6 +41,10 @@ const keysToSync = [
   'NEXT_PUBLIC_VAPID_PUBLIC_KEY',
   'VAPID_PRIVATE_KEY',
   'VAPID_SUBJECT',
+  'LOCAL_BACKEND_TOKEN',
+  'LOCAL_BRIDGE_TOKEN',
+  'NEXT_PUBLIC_LOCAL_BACKEND_TOKEN',
+  'NEXT_PUBLIC_LOCAL_BRIDGE_TOKEN',
 ];
 
 console.log(`🚀 Updating Vercel Environment Variables for project '${projectId}'...\n`);

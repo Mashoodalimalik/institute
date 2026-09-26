@@ -30,8 +30,11 @@ export function jsonServer({ token, handler, allowedOrigins = [], health = {} })
     }
     if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}
     if (req.method === 'GET' && url.pathname === '/health') return send({status:'ok', apiVersion:3,...health});
-    const supplied = Buffer.from(req.headers.authorization || '');
-    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return send({error:'Unauthorized local service request'}, 403);
+    const isPublicRead = req.method === 'GET' && ['/v1/status', '/v1/whatsapp/session', '/v1/hardware/config'].includes(url.pathname);
+    if (!isPublicRead) {
+      const supplied = Buffer.from(req.headers.authorization || '');
+      if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return send({error:'Unauthorized local service request'}, 403);
+    }
     try {
       let body;
       if (req.method === 'POST') {
