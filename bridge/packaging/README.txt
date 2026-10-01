@@ -1,10 +1,10 @@
-OKASHA BRIDGE 0.1.0 — WINDOWS x64
+OKASHA BRIDGE 0.2.0 — WINDOWS x64
 
-Run OkashaBridge.exe (or install using OkashaBridgeSetup-0.1.0.exe).
+Run OkashaBridge.exe (or install using OkashaBridgeSetup-0.2.0.exe).
 The tray launcher starts the hardware and WhatsApp adapters. Closing its window keeps them running. Exit from the tray stops both.
 
-Open the institute web app, then Settings. Link WhatsApp by QR, enter the real K40 IP address, save and test it.
-The institute web app/local backend must also be running. The bridge does not host the school database or schedule notifications.
+Open the deployed institute web app as an administrator. Copy the pairing key from this app's tray menu and paste it into Settings > Connect this PC to the bridge. Allow local network access if prompted.
+Keep the web app open during operating hours. Link WhatsApp by QR, enter the real K40 IP address, save and test it. No separate local backend is needed. The bridge does not host the school database or schedule notifications.
 
 Ports: hardware 14318, WhatsApp 14320. Both bind to 127.0.0.1.
 This build accepts requests from any browser domain, with a local bearer token required for operations. INSTITUTE_ALLOWED_ORIGINS can later restrict origins.

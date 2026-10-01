@@ -7,7 +7,7 @@ const headers={'Cache-Control':'no-store'};
 export async function GET() {
   const auth=await requireUser(['super_admin']);if(auth.response)return auth.response;
   try{return NextResponse.json(await hardwareConfiguration(),{headers});}
-  catch{return NextResponse.json({error:'Local backend is unavailable'},{status:503,headers});}
+  catch{return NextResponse.json({error:'Bridge settings database is unavailable. Apply the cloud bridge migration and verify Supabase configuration.'},{status:503,headers});}
 }
 export async function POST(req:NextRequest) {
   const auth=await requireUser(['super_admin']);if(auth.response)return auth.response;

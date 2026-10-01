@@ -14,6 +14,9 @@ def test_all_domains_accepted_but_token_required():
     assert client.get('/v1/functions', headers={'Origin': 'https://institute.example'}).status_code == 403
     assert client.get('/health', headers={'Host': 'attacker.example'}).status_code == 403
     assert client.get('/health').json()['domainPolicy'] == 'any'
+    preflight = client.options('/v1/execute', headers={'Origin':'https://institute.example','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,content-type','Access-Control-Request-Private-Network':'true'})
+    assert preflight.status_code == 200
+    assert preflight.headers['access-control-allow-private-network'] == 'true'
 
 
 def test_allowlist_can_be_added_later():

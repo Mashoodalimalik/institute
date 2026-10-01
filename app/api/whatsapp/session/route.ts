@@ -9,7 +9,7 @@ export async function GET() {
   const auth = await requireUser(['super_admin']);
   if (auth.response) return auth.response;
   try { return NextResponse.json(await whatsAppSession(), { headers }); }
-  catch { return NextResponse.json({ error: 'WhatsApp service is unavailable. Start the institute local services on this computer.' }, { status: 503, headers }); }
+  catch { return NextResponse.json({ error: 'Bridge settings database is unavailable. Apply the cloud bridge migration and verify Supabase configuration.' }, { status: 503, headers }); }
 }
 
 export async function POST(request: NextRequest) {

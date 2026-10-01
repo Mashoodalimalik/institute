@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Download, Fingerprint, Loader2, RefreshCw, Cpu } from 'lucide-react';
-import { fetchBridgeStatus, getBridgeCredentials, ClientBridgeStatus } from '@/lib/client-bridge';
+import { fetchBridgeStatus, waitForCommand, ClientBridgeStatus } from '@/lib/client-bridge';
 
 type Config = {id:string;address:string;port:number;forceUdp:boolean;hasCommKey:boolean;configured:boolean};
 
@@ -20,23 +20,8 @@ export default function BridgeStatus() {
       const status = await fetchBridgeStatus();
       setHealth(status);
 
-      // Try on-device config first if bridge detected
-      let settings: any = null;
-      if (status.onDevice) {
-        try {
-          const creds = await getBridgeCredentials();
-          const r = await fetch(`${creds.backendUrl}/v1/hardware/config`, {
-            headers: { 'Authorization': `Bearer ${creds.backendToken}` },
-          });
-          if (r.ok) settings = await r.json();
-        } catch {}
-      }
-
-      if (!settings) {
-        const r = await fetch('/api/hardware/config', { cache: 'no-store' });
-        if (r.ok) settings = await r.json();
-      }
-
+      const r=await fetch('/api/hardware/config',{cache:'no-store'});
+      const settings=await r.json();if(!r.ok)throw Error(settings.error||'Could not load device settings');
       if (settings) setConfig(settings);
     } catch(e) {
       setError(e instanceof Error ? e.message : 'Local services unavailable');
@@ -51,7 +36,7 @@ export default function BridgeStatus() {
       const response=await fetch('/api/hardware/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:kind,config:config?{id:config.id,address:config.address.trim(),port:config.port,forceUdp:config.forceUdp,commKey}:undefined})});
       const data=await response.json();if(!response.ok)throw Error(data.error||'Device operation failed');
       if(kind==='save'){setConfig(data);setCommKey('');setNotice('Device settings saved. Test the connection when the K40 is available.');}
-      else {setIdentity(data);setNotice('K40 responded successfully.');}
+      else {const results=await Promise.all(data.commands.map((c:any)=>waitForCommand(c)));setIdentity({model:results[0].result,serialNumber:results[1].result});setNotice('K40 responded successfully.');}
     }catch(e){setError(e instanceof Error?e.message:'Device operation failed');}
     finally{setBusy('');}
   }
@@ -63,7 +48,7 @@ export default function BridgeStatus() {
         {health?.onDevice && (
           <span className="text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full px-2.5 py-0.5 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            On-Device Mode
+            This browser is paired
           </span>
         )}
       </div>
@@ -78,7 +63,7 @@ export default function BridgeStatus() {
           : 'Install Okasha Bridge on this computer and keep its tray icon running. Link WhatsApp in the panel above.'}
       </p>
     </div>
-    <a className="btn-secondary inline-flex text-sm" href="/downloads/OkashaBridgeSetup-0.1.0.exe" download><Download size={16}/>Download Okasha Bridge for Windows</a>
+    {process.env.NEXT_PUBLIC_BRIDGE_DOWNLOAD_URL ? <a className="btn-secondary inline-flex text-sm" href={process.env.NEXT_PUBLIC_BRIDGE_DOWNLOAD_URL}><Download size={16}/>Download Okasha Bridge for Windows</a> : <p className="text-xs text-slate-400">Use the provided Okasha Bridge 0.2.0 installer on the operating laptop.</p>}
     {error&&<p role="alert" className="text-sm text-red-400">{error}</p>}
     {notice&&<p role="status" className="text-sm text-emerald-300">{notice}</p>}
     {config&&<>

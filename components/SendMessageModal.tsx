@@ -92,7 +92,7 @@ export default function SendMessageModal({
   const [onDevice, setOnDevice] = useState(false);
 
   useEffect(() => {
-    checkOnDeviceBridge().then(setOnDevice);
+    checkOnDeviceBridge().then(setOnDevice).catch(()=>setOnDevice(false));
   }, []);
 
   // Load custom templates from localStorage

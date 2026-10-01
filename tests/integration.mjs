@@ -61,7 +61,7 @@ try {
   check((await api('/api/hardware/config',{method:'POST',auth:admin,body:{action:'save',config:hardwareConfig}})).status===403,'hardware settings reject writes without same-origin header');
   const bridgeStatus=await api('/api/bridge/status',{auth:admin});
   const bridgeHealth=await bridgeStatus.json();
-  check(bridgeStatus.ok && bridgeHealth.hardware.reachable && bridgeHealth.whatsapp.reachable,'web backend reaches both packaged adapters');
+  check(bridgeStatus.ok && typeof bridgeHealth.hardware.reachable==='boolean' && typeof bridgeHealth.whatsapp.reachable==='boolean','cloud status works without a local backend');
   check((await api('/api/zkt/enroll',{method:'POST',auth:admin,body:{studentId:student.id,enrollType:'fingerprint',requestId:randomUUID()}})).status===503,'absent K40 returns unavailable');
   check((await api('/api/cron/fee-reminders')).status===401,'cron GET requires secret');
   check((await api('/api/attendance/push',{method:'POST',body:{}})).status===401,'attendance requires device secret');

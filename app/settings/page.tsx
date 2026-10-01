@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import BridgeStatus from '@/components/BridgeStatus';
+import BridgePairing from '@/components/BridgePairing';
+import BridgeHistory from '@/components/BridgeHistory';
 import WhatsAppConnection from '@/components/WhatsAppConnection';
 import {
   Settings, Bell, MessageSquare, Phone, Calendar, Clock,
@@ -124,8 +126,10 @@ export default function SettingsPage() {
 
         <div className="flex-1 p-6 max-w-2xl mx-auto w-full space-y-6">
           {error && <p role="alert" className="text-red-400">{error}</p>}
+          <BridgePairing />
           <WhatsAppConnection />
           <BridgeStatus />
+          <BridgeHistory />
 
           {/* Institute Info */}
           <SettingSection title="Institute Details" icon={<Settings size={16} className="text-brand-400" />}>
@@ -274,17 +278,16 @@ export default function SettingsPage() {
                   <div className="text-sm font-medium text-slate-300">Fee Reminder Cron</div>
                   <div className="text-xs text-slate-600 mt-0.5">
                     The Vercel schedule targets 09:00 AM Pakistan time via <code className="text-xs bg-surface-700 px-1 py-0.5 rounded">/api/cron/fee-reminders</code>.
-                    A local reminder scheduler is not configured. Enabling WhatsApp alone does not start scheduled reminders.
+                    Messages are queued in Supabase and sent while the operating laptop's paired web app is open.
                   </div>
                 </div>
               </div>
               <div className="flex items-start gap-3 p-3 rounded-xl bg-surface-800/60">
                 <CheckCircle size={16} className="text-emerald-400 mt-0.5 flex-shrink-0" />
                 <div>
-                  <div className="text-sm font-medium text-slate-300">Biometric Webhook</div>
+                  <div className="text-sm font-medium text-slate-300">Attendance Sync</div>
                   <div className="text-xs text-slate-600 mt-0.5">
-                    The K40 bridge forwards attendance to <code className="text-xs bg-surface-700 px-1 py-0.5 rounded">/api/attendance/push</code>
-                    — auto check_in/check_out with parent alerts.
+                    The web app reads K40 attendance about every 30 seconds while the paired laptop is online, then records check-in/check-out and queues guardian alerts.
                   </div>
                 </div>
               </div>

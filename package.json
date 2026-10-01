@@ -19,7 +19,9 @@
     "test:hardware": "node --env-file=.env.local scripts/test-hardware.mjs",
     "supabase": "supabase",
     "db:verify": "node --env-file=.env.local scripts/verify-supabase.mjs",
-    "db:admin": "node --env-file=.env.local scripts/bootstrap-admin.mjs"
+    "db:admin": "node --env-file=.env.local scripts/bootstrap-admin.mjs",
+    "test:cloud-bridge": "node --test tests/cloud-bridge.test.mjs",
+    "test:cloud-integration": "node --env-file=.env.local tests/cloud-bridge-integration.mjs"
   },
   "dependencies": {
     "@react-pdf/renderer": "4.9.0",

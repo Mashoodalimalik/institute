@@ -1,6 +1,7 @@
+import { sendBridgeWhatsApp } from '@/lib/bridge';
 import { requireUser } from '@/lib/api-auth';
 import { NextRequest, NextResponse } from 'next/server';
-import { sendWhatsApp, buildReceiptMessage } from '@/lib/services/notifications';
+import { buildReceiptMessage } from '@/lib/services/notifications';
 import { serverStore as demoStore } from '@/lib/services/server-store';
 
 export const runtime = 'nodejs';
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
   const auth = await requireUser(['super_admin', 'staff']);
   if (auth.response) return auth.response;
   try {
-    const { student_id, receipt_id, custom_message, phone } = await req.json();
+    const { student_id, receipt_id, custom_message, phone, requestId } = await req.json();
 
     let message = custom_message || '';
     let recipientPhone = phone;
@@ -46,8 +47,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'phone and message are required' }, { status: 400 });
     }
 
-    const result = await sendWhatsApp(recipientPhone, message);
-    return NextResponse.json({ success: result.success, sid: result.sid, error: result.error }, { status: result.success ? 200 : 502 });
+    const result = await sendBridgeWhatsApp(recipientPhone, message, requestId);
+    return NextResponse.json(result, { status: result.queued ? 202 : result.success ? 200 : 502 });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }

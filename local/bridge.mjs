@@ -26,7 +26,7 @@ export function pythonCall(python, command) {
 
 export function createRawBridge({token, whatsapp, catalogs, hardware, encode=value=>value, allowedOrigins=['*']}) {
   const busy=new Set();
-  return jsonServer({token,allowedOrigins,health:{component:'whatsapp',version:'0.1.0',domainPolicy:allowedOrigins.includes('*')?'any':'allowlist'},handler:async({method,url,body})=>{
+  return jsonServer({token,allowedOrigins,health:{component:'whatsapp',version:'0.2.0',domainPolicy:allowedOrigins.includes('*')?'any':'allowlist'},handler:async({method,url,body})=>{
     const component=url.searchParams.get('component');
     if(method==='GET' && url.pathname==='/v1/functions') {
       if(!['hardware','whatsapp'].includes(component))throw Error('Unknown component');

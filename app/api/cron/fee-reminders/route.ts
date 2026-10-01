@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const results = { processed: 0, reminded: 0, notifications_sent: 0, errors: [] as string[] };
+  const results = { processed: 0, reminded: 0, notifications_sent: 0, notifications_queued: 0, errors: [] as string[] };
   try {
     const { error } = await createServiceClient().rpc('refresh_fee_status');
     if (error) throw error;
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     for (const student of students) {
       results.processed++;
       if (student.last_reminder_sent && Date.now() - Date.parse(student.last_reminder_sent) < settings.reminder_interval_days * 86400000) continue;
-      const before = results.notifications_sent;
+      const before = results.notifications_sent + results.notifications_queued;
       const receipts = await serverStore.getReceiptsForStudent(student.id);
       const month = new Date(Date.now() + 5 * 3600000).toISOString().slice(0, 7);
       const paid = receipts.filter(r => new Date(Date.parse(r.created_at) + 5 * 3600000).toISOString().startsWith(month)).reduce((sum, r) => sum + Number(r.amount), 0);
@@ -25,8 +25,9 @@ export async function POST(req: NextRequest) {
       // Unpaid late charges are never booked as cash income by a reminder job.
       const message = buildFeeReminderMessage({ studentName: student.full_name, amount,
         instituteName: settings.institute_name, isOverdue: student.fee_status === 'overdue', dueDay: settings.universal_due_day });
-      const record = (result: { success: boolean; error?: string }) => {
+      const record = (result: { success: boolean; error?: string; queued?: boolean }) => {
         if (result.success) results.notifications_sent++;
+        else if(result.queued) results.notifications_queued++;
         else results.errors.push(`${student.id}: ${result.error || 'Notification failed'}`);
       };
       if (student.parent?.web_push_sub) record(await sendWebPush(student.parent.web_push_sub, {
@@ -34,9 +35,9 @@ export async function POST(req: NextRequest) {
       }));
       for (const phone of Array.from(new Set([student.phone_number, student.parent?.phone_number].filter(Boolean) as string[]))) {
         if (settings.notify_sms) record(await sendSMS(phone, message));
-        if (settings.notify_whatsapp) record(await sendWhatsApp(phone, message));
+        if (settings.notify_whatsapp) record(await sendWhatsApp(phone, message, `fee-${student.id}-${month}-${Math.floor(Date.now()/(Math.max(1,settings.reminder_interval_days)*86400000))}-${phone.replace(/\D/g,'')}`));
       }
-      if (results.notifications_sent > before) {
+      if (results.notifications_sent + results.notifications_queued > before) {
         await serverStore.updateStudent(student.id, { last_reminder_sent: new Date().toISOString() });
         results.reminded++;
       }

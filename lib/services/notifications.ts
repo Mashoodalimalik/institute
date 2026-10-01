@@ -17,6 +17,8 @@ interface NotificationResult {
   sid?: string;
   error?: string;
   demo?: boolean;
+  queued?: boolean;
+  state?: string;
 }
 
 // Configure Web Push VAPID keys
@@ -111,8 +113,8 @@ export async function sendSMS(to: string, message: string): Promise<Notification
   return sendNotification({ to, message, channel: 'sms' });
 }
 
-export async function sendWhatsApp(to: string, message: string): Promise<NotificationResult> {
-  try { return await sendBridgeWhatsApp(to, message); }
+export async function sendWhatsApp(to: string, message: string, requestId?: string): Promise<NotificationResult> {
+  try { return await sendBridgeWhatsApp(to, message, requestId); }
   catch (error) { return { success: false, error: error instanceof Error ? error.message : 'WhatsApp bridge unavailable' }; }
 }
 

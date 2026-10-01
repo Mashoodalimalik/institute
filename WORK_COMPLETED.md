@@ -1,6 +1,8 @@
 # Work completed — Okasha Institute
 
-Updated: 24 September 2026 (Pakistan time).
+Original work: 24 September 2026 (Pakistan time).
+
+**Architecture update — 2 October 2026:** the local backend described below has been replaced in the web application by Supabase command storage and an authenticated browser controller. See [CLOUD_ARCHITECTURE.md](CLOUD_ARCHITECTURE.md). The original completion record below is historical.
 
 This records the work completed during the Supabase setup, application fixes, local backend implementation and combined bridge packaging. Verification results describe the checks performed during that work; they are not a continuous service-health report.
 

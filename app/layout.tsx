@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 import ServiceWorker from '@/components/ServiceWorker';
+import BridgeController from '@/components/BridgeController';
 
 export const metadata: Metadata = {
   title: 'The Prism Coaching Center — Management System',
@@ -47,6 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <ServiceWorker />
         <AuthProvider>
+          <BridgeController />
           {children}
         </AuthProvider>
       </body>

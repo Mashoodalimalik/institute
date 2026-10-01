@@ -10,7 +10,8 @@ const [hardware,whatsapp]=await Promise.all([alive(14318),alive(14320)]);
 if(hardware!==whatsapp)throw Error('Only one adapter is running. Exit the old bridge before launching the combined bridge.');
 const children=[];
 if(!hardware)children.push(spawn(executable,['--background'],{stdio:'ignore',windowsHide:true}));
-children.push(spawn(process.execPath,['scripts/local-backend.mjs'],{stdio:'inherit',windowsHide:true}));
+// The web app and Supabase own orchestration. No local backend is needed.
+if(hardware)console.log('Combined bridge is already running. Open the deployed web app to process commands.');
 let stopping=false;
 function stop(){if(stopping)return;stopping=true;for(const child of children)child.kill();}
 for(const child of children){child.on('error',error=>{console.error(error.message);stop();process.exitCode=1;});child.on('exit',code=>{if(!stopping){stop();process.exitCode=code || 1;}});}

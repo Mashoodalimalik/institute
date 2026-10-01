@@ -69,7 +69,9 @@ class OkashaBridgeLauncher : ApplicationContext {
             throw new Exception("A Bridge or another program already uses a required local port (" + hardwarePort + " / " + whatsappPort + "). Close the existing Bridge before starting this installation. No device or account data was changed.");
         Directory.CreateDirectory(Path.Combine(directory, "logs"));
         string tokenPath = Path.Combine(directory, "bridge.token");
-        if (!File.Exists(tokenPath)) { byte[] secret = new byte[32]; using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(secret); File.WriteAllText(tokenPath, BitConverter.ToString(secret).Replace("-", "").ToLowerInvariant()); }
+        // v0.2 invalidates keys previously embedded in web builds. Rotate once per installation data directory.
+        string pairingVersion = Path.Combine(directory, "pairing-v2");
+        if (!File.Exists(tokenPath) || !File.Exists(pairingVersion)) { byte[] secret = new byte[32]; using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(secret); File.WriteAllText(tokenPath, BitConverter.ToString(secret).Replace("-", "").ToLowerInvariant()); File.WriteAllText(pairingVersion, "2"); }
         showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, name + "-show");
         exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, name + "-exit");
         appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -82,6 +84,7 @@ class OkashaBridgeLauncher : ApplicationContext {
         IntPtr handle = statusWindow.Handle;
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open Bridge status", null, delegate { ShowStatus(); });
+        menu.Items.Add("Copy web app pairing key", null, delegate { Clipboard.SetText(File.ReadAllText(Path.Combine(directory, "bridge.token")).Trim()); });
         menu.Items.Add("Open Okasha", null, delegate { OpenLink("http://127.0.0.1:3000/settings"); });
         menu.Items.Add(new ToolStripSeparator());
         hardwareItem = new ToolStripMenuItem("Hardware: starting...") { Enabled = false };

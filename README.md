@@ -2,7 +2,7 @@
 
 See [WORK_COMPLETED.md](WORK_COMPLETED.md) for the completed changes, verification results and remaining work.
 
-Next.js 15, React 19 and Supabase institute management, with a separate local backend and combined K40/WhatsApp bridge. The backend requires Node.js 24+. The Windows bridge includes its own Python and Node runtimes.
+Next.js 15, React 19 and Supabase institute management, with a Vercel/Supabase web backend and a combined K40/WhatsApp bridge. Development requires Node.js 24+. The Windows bridge includes its own Python and Node runtimes.
 
 ## Run locally
 
@@ -35,47 +35,40 @@ Browser queries use the logged-in session and RLS. Service credentials are restr
 
 Fee collection uses a database transaction and a request UUID. Retries using the same UUID return the original receipt without collecting twice. Partial payments keep the remaining fee unpaid. Status is calculated from current-month receipts. Receipts can be downloaded again using `/api/receipts/pdf?id=...` by authorized staff, the student, or their parent.
 
-## Local backend and raw bridge
+## Cloud web app and local bridge
 
-The application uses **Next.js → local backend (`127.0.0.1:14310`) → Okasha Bridge → K40/WhatsApp**. One tray launcher owns the hardware adapter on port 14318 and WhatsApp adapter on 14320. Next.js never sends commands directly to the bridge. See [local/README.md](local/README.md) for endpoints and ownership of each layer.
+The current architecture is **Supabase ↔ Next.js on Vercel ↔ operating laptop's browser ↔ raw bridge ↔ K40/WhatsApp**. Vercel never calls localhost. No separate local backend on port 14310 is required.
 
-The backend exposes the same library function catalogs as the bridge. It owns device configuration, account targeting, number normalization, the persistent command queue/results, reconnect preferences and enrollment verification. The bridge validates a raw command, calls the library, and returns its result. It retains only the protocol session needed by Baileys; it has no institute database, tenant ownership, controller leases, attendance polling or notification rules.
+Supabase stores device settings, the command journal, controller heartbeat and short-lived WhatsApp status. Authenticated Next.js routes own validation, permissions, notifications and attendance processing. One administrator browser on the operating laptop claims queued commands and sends them to the raw adapters on `127.0.0.1:14318` (hardware) and `127.0.0.1:14320` (WhatsApp), then reports results. The adapters only execute commands and maintain required library sessions.
 
-All services bind only to loopback. The backend rejects browser origins; the bridge accepts all origins for this build but still requires its bearer token. Set `INSTITUTE_ALLOWED_ORIGINS` to comma-separated origins when a restriction is needed. The browser uses authenticated Next.js routes and never receives local service tokens. The original Gymatic services on ports 4318/4320 remain independent.
+### Set up the operating laptop
 
-**The K40 is not present, so its IP remains empty.** In **Settings → K40 & Local Bridge**, save its real IP, device ID, port and communication key when available, then test the saved connection. Defaults are device ID `k40-main`, port 4370 and key 0. Existing environment values provide initial defaults; saved backend preferences take priority. No physical device commands have been tested. Assign numeric device user IDs and save actual RFID card numbers rather than generated tags.
+1. Build or install **Okasha Bridge 0.2.0** and keep its tray application running.
+2. Open the deployed web app in Chrome or Edge and sign in as an approved administrator.
+3. From the bridge tray menu choose **Copy web app pairing key**. Paste it into **Settings → Connect this PC to the bridge** and click **Connect this PC**.
+4. Allow local network access if the browser asks. The key stays in that browser; it is never sent to Vercel or Supabase.
+5. Link WhatsApp using its QR panel. Save the actual K40 IP and communication settings when the device is available.
+6. Keep this administrator session open during operating hours. The controller continues across application pages; closing the browser or signing out pauses new dispatches.
 
-## Link WhatsApp
+Bridge 0.2.0 rotates the previous local key once because older web builds contained fallback tokens. Existing WhatsApp credentials remain intact. Pair each trusted browser using the new key. There are no public bridge tokens or credential-download API routes.
 
-Run `npm run local:services` alongside Next.js on this Windows computer. It starts the installed bridge (or the built portable copy) and the local backend. This project contains its own adapted hardware and Baileys source under `bridge/`; no Gymatic installation is required. The launcher stores its generated token in `%LOCALAPPDATA%/OkashaInstitute/Bridge/bridge.token`; the backend reads that file, with `LOCAL_BRIDGE_TOKEN` as a development fallback. `LOCAL_BACKEND_TOKEN` remains a separate secret in `.env.local`.
+Device/session commands expire after ten minutes; ordinary messages can wait up to 24 hours, while arrival alerts expire after five minutes. A command is claimed once before dispatch; a lost response becomes uncertain and is never automatically re-executed. **Settings → Recent bridge commands** distinguishes queued, running, succeeded, failed, cancelled and uncertain outcomes. A queued message is never described as delivered. Only one browser controller may be active at a time.
 
-In **Settings → WhatsApp**, click **Link WhatsApp**. On the institute phone, open **WhatsApp → Linked devices → Link a device** and scan the QR. The panel refreshes QR codes and connection status automatically. Only an approved administrator can view QR codes or change the session.
+### K40 and attendance
 
-Credentials are stored separately in `%LOCALAPPDATA%/OkashaInstitute/WhatsApp`, encrypted by the adapter with a Windows DPAPI-protected key. The backend restores paired sessions after restart; its command journal and preferences live in `%LOCALAPPDATA%/OkashaInstitute/Backend`. **Disconnect** keeps credentials and stops automatic reconnection; **Reconnect WhatsApp** resumes it. **Unlink account** clears this institute session and logs out remotely when connected. When offline, also remove the linked device from the phone. Start local services again after reboot; no Windows startup task is installed.
+The physical K40 is not available yet, so its IP remains empty. Defaults are device ID `k40-main`, port `4370` and communication key `0`. Device settings live in Supabase and each queued command captures its target connection, so changing settings cannot retarget queued work. The UI never reveals a saved communication key.
 
-Notifications target the currently connected account explicitly. `BRIDGE_WHATSAPP_ACCOUNT_ID` is an optional account pin; leave it empty to use the account linked through Settings. Pairing does not enable notifications or send a test message. Enable the desired notification channel separately.
+The web controller requests attendance reads about every 30 seconds when configured. Next.js processes returned records in batches, interprets device wall times as Pakistan time, deduplicates them in PostgreSQL and applies check-in/check-out alternation. It never clears device logs. Historical punches older than five minutes do not send fresh arrival alerts. Notification command IDs prevent duplicate attendance messages.
 
-`/api/bridge/status` checks the local backend. `/api/zkt/enroll` queues `enroll_user` through it; device user slots must already exist. The backend checks both the library's enrollment result and template readback. Failed, cancelled and uncertain commands are never reported as completed enrollment. Card enrollment is performed on the K40; save the observed card number in the student's profile.
+Fingerprint enrollment requires a numeric K40 user ID and an existing device user slot. Success must include template readback verification. Record cards on the K40 and save the actual card number in the student profile.
 
-The Next server must run on the bridge PC for server-side enrollment and WhatsApp. A cloud deployment cannot reach this PC through its own `127.0.0.1`; those operations need a browser/local controller in a cloud deployment. This checkout does not create a public tunnel.
+`/api/attendance/push` remains a secret-protected normalized event endpoint for compatibility. It is not an ADMS protocol server. The old `local/` backend and forwarder are retained as legacy development utilities; the cloud application does not use them.
 
-## Attendance ingestion
+### Deployment
 
-After configuring the real K40, run `npm run bridge:forward` on the backend PC. This backend-side worker queues `get_attendance` through the local backend, interprets device wall times as Pakistan time, forwards them in timestamp order and retries failed database handoffs without clearing device logs. `NEXT_PUBLIC_APP_URL` may be a local app or an HTTPS cloud receiver. The worker stays stopped while the device IP/ID are empty.
+Apply `20261002000100_cloud_bridge_commands.sql` along with the preceding migrations. Set the Supabase URL, public key, service-role key, app URL, webhook/cron secrets and optional push/SMS credentials on Vercel. Never set `NEXT_PUBLIC_LOCAL_BACKEND_TOKEN` or `NEXT_PUBLIC_LOCAL_BRIDGE_TOKEN`; remove old copies from the deployment settings. Local bridge tokens do not belong in Vercel.
 
-`POST /api/attendance/push` accepts a normalized record from a local forwarder, **not raw ZKTeco ADMS protocol**:
-
-```json
-{
-  "user_id": "101",
-  "timestamp": "2026-09-23T09:00:00+05:00",
-  "device_id": "k40-main",
-  "source_event_id": "stable-bridge-event-id",
-  "secret": "DEVICE_WEBHOOK_SECRET value"
-}
-```
-
-Retries are deduplicated in PostgreSQL. Check-in/out alternation is per Pakistan calendar day and is recalculated for recovered records arriving out of order. Historical punches older than five minutes do not send fresh arrival alerts. Physical device behavior still requires validation when the K40 is available.
+The executable is a generated artifact, not tracked source. Set `NEXT_PUBLIC_BRIDGE_DOWNLOAD_URL` to a hosted installer URL when publishing the web app, or distribute the installer separately. See [bridge/README.md](bridge/README.md) for rebuilding and [CLOUD_ARCHITECTURE.md](CLOUD_ARCHITECTURE.md) for the command lifecycle.
 
 ## Notifications and cron
 

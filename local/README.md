@@ -1,3 +1,5 @@
+> Legacy architecture retained for development reference. The deployed application no longer uses this local backend. See [CLOUD_ARCHITECTURE.md](../CLOUD_ARCHITECTURE.md) for the current web-controlled bridge.
+
 # Local service architecture
 
 ```mermaid

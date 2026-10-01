@@ -13,7 +13,15 @@ from starlette.concurrency import run_in_threadpool
 from .adapters.zk_standalone import ZKStandaloneAdapter
 from .function_catalog import catalog, execute, validate
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
+
+
+class LocalNetworkCORS(CORSMiddleware):
+    def preflight_response(self, request_headers):
+        response = super().preflight_response(request_headers)
+        if response.status_code == 200 and request_headers.get('access-control-request-private-network') == 'true':
+            response.headers['Access-Control-Allow-Private-Network'] = 'true'
+        return response
 
 
 def create_app(token, allowed_origins=None, executor=execute, adapter_factory=ZKStandaloneAdapter):
@@ -40,7 +48,7 @@ def create_app(token, allowed_origins=None, executor=execute, adapter_factory=ZK
 
     # Wildcard domain policy requested for this build. Authentication is independent.
     origins = allowed_origins if allowed_origins is not None else ['*']
-    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'])
+    app.add_middleware(LocalNetworkCORS, allow_origins=origins, allow_methods=['GET', 'POST'], allow_headers=['Authorization', 'Content-Type'])
 
     @app.get('/health')
     async def health():
