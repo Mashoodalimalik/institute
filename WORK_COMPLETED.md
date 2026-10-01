@@ -4,6 +4,8 @@ Original work: 24 September 2026 (Pakistan time).
 
 **Architecture update — 2 October 2026:** the local backend described below has been replaced in the web application by Supabase command storage and an authenticated browser controller. See [CLOUD_ARCHITECTURE.md](CLOUD_ARCHITECTURE.md). The original completion record below is historical.
 
+**Enrollment fix — Bridge 0.2.1, 2 October 2026:** fixed `'bool' object has no attribute 'uid'` when pyzk returns `False` for a missing device user during fingerprint readback. The executor now resolves and checks the K40 user ID before capture, and validates the returned fingerprint's type, UID, slot and nonempty valid template before reporting success. A Boolean acknowledgement cannot count as verified enrollment. The Enrollment tab now explains that the matching user must exist on the K40 and that RFID capture is performed on the device. This patch does not automatically create or overwrite device users. Hardware regression suite: 27 passing tests; Next.js production build passed. Physical-device verification remains on the operating laptop.
+
 This records the work completed during the Supabase setup, application fixes, local backend implementation and combined bridge packaging. Verification results describe the checks performed during that work; they are not a continuous service-health report.
 
 ## 1. Separate Supabase project

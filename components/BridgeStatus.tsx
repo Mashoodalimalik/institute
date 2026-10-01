@@ -63,7 +63,7 @@ export default function BridgeStatus() {
           : 'Install Okasha Bridge on this computer and keep its tray icon running. Link WhatsApp in the panel above.'}
       </p>
     </div>
-    {process.env.NEXT_PUBLIC_BRIDGE_DOWNLOAD_URL ? <a className="btn-secondary inline-flex text-sm" href={process.env.NEXT_PUBLIC_BRIDGE_DOWNLOAD_URL}><Download size={16}/>Download Okasha Bridge for Windows</a> : <p className="text-xs text-slate-400">Use the provided Okasha Bridge 0.2.0 installer on the operating laptop.</p>}
+    {process.env.NEXT_PUBLIC_BRIDGE_DOWNLOAD_URL ? <a className="btn-secondary inline-flex text-sm" href={process.env.NEXT_PUBLIC_BRIDGE_DOWNLOAD_URL}><Download size={16}/>Download Okasha Bridge for Windows</a> : <p className="text-xs text-slate-400">Use the provided Okasha Bridge 0.2.1 installer on the operating laptop.</p>}
     {error&&<p role="alert" className="text-sm text-red-400">{error}</p>}
     {notice&&<p role="status" className="text-sm text-emerald-300">{notice}</p>}
     {config&&<>

@@ -144,6 +144,16 @@ def execute(adapter: Any, name: str, arguments: dict, *, preflight=None) -> Any:
     with adapter._connection() as connection:
         if preflight is not None:
             preflight(connection)
+        if name == "enroll_user":
+            # Resolve both identifiers before capture. pyzk accepts a user_id
+            # that is absent on the device, then returns False on readback.
+            uid, user_id = converted.get("uid"), converted.get("user_id", "")
+            user = next((u for u in connection.get_users()
+                         if (not uid or u.uid == uid)
+                         and (not user_id or str(u.user_id) == user_id)), None) if uid or user_id else None
+            if user is None:
+                raise ValueError("K40 user not found. Create the user on the K40 first, then save the same numeric K40 user ID on the student's Enrollment tab.")
+            converted.update(uid=int(user.uid), user_id=str(user.user_id))
         if name == "delete_user_template":
             users = connection.get_users()
             user = next((u for u in users if (converted.get("uid") and u.uid == converted["uid"]) or (not converted.get("uid") and str(u.user_id) == str(converted.get("user_id", "")))), None)
@@ -153,11 +163,14 @@ def execute(adapter: Any, name: str, arguments: dict, *, preflight=None) -> Any:
         else:
             result = FUNCTIONS[name](connection, **converted)
         if name == "enroll_user":
+            connection.refresh_data()
             retained = connection.get_user_template(uid=converted.get("uid", 0), user_id=converted.get("user_id", ""), temp_id=converted.get("temp_id", 0))
-            if retained is None:
-                raise RuntimeError("The device did not retain the enrolled fingerprint")
-            user = next((u for u in connection.get_users() if int(u.uid) == int(retained.uid)), None)
-            result = {"verifiedByReadBack": True, "sourceIdentity": f"zk-user:{user.user_id}" if user else None}
+            # None/False are unsuccessful reads, not Finger objects. A positive
+            # enrollment acknowledgement alone never establishes success.
+            if (not isinstance(retained, Finger) or not retained.valid or not retained.template
+                    or retained.uid != converted["uid"] or retained.fid != converted.get("temp_id", 0)):
+                raise RuntimeError("Fingerprint enrollment could not be verified on the K40. Check the user and fingerprint on the device before retrying.")
+            result = {"verifiedByReadBack": True, "sourceIdentity": f"zk-user:{converted['user_id']}"}
         if name == "read_sizes":
             result = {key: getattr(connection, key, None) for key in
                       ("users", "fingers", "records", "cards", "users_cap", "fingers_cap", "rec_cap", "users_av", "fingers_av", "rec_av")}

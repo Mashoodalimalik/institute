@@ -604,7 +604,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                       <Radio size={14} /> ZKTeco Scanner Command
                     </div>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      Select enrollment type and click <strong className="text-white">Send to Scanner</strong>. The website will send a command to the ZKTeco device to open enrollment mode — then ask the student to scan their finger or RFID card on the device.
+                      First create the user on the K40 and save the same numeric K40 user ID below. For fingerprints, click <strong className="text-white">Send to Scanner</strong> and follow the device prompts. For RFID, enroll the card on the K40 and save its actual card number below.
                     </p>
 
                     {/* Enrollment type toggle */}
