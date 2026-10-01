@@ -2,7 +2,8 @@ import 'server-only';
 import { createServiceClient } from '@/lib/supabase/server';
 import { isDeepStrictEqual } from 'node:util';
 import { deviceConfiguration, normalizePhone, sanitizeSession } from './bridge-validation.mjs';
-import { checkedUserFromInventory } from './enrollment-check.mjs';
+import { checkedUserFromInventory, planDeviceUser } from './enrollment-check.mjs';
+import { createHash } from 'node:crypto';
 
 type Component = 'hardware' | 'whatsapp';
 export type Command = {requestId:string;component:Component;method:string;arguments?:any;target?:any;state:string;result?:any;error?:{message?:string}};
@@ -47,6 +48,19 @@ export async function checkedEnrollmentUser(checkId:string,userId:string) {
   const row=checked(await db().from('bridge_commands').select('*').eq('request_id',checkId).single());
   const {device}=await bridgeSettings();
   return checkedUserFromInventory(row,device,userId);
+}
+export async function prepareEnrollmentUser(checkId:string,userId:string,name:string) {
+  const row=checked(await db().from('bridge_commands').select('*').eq('request_id',checkId).single());
+  const {device}=await bridgeSettings();
+  const prefix='enroll-create-'+createHash('sha256').update(JSON.stringify(device)).digest('hex').slice(0,20)+'-';
+  // Command IDs reserve slots across concurrent web requests. A competing
+  // reservation fails on the command's unique key instead of overwriting a user.
+  const reservations=checked(await db().from('bridge_commands').select('*').like('request_id',prefix+'%'));
+  const args=planDeviceUser(row,device,userId,name,(reservations||[]).map((r:any)=>r.arguments.uid));
+  if(!args)return null;
+  const previous=(reservations||[]).find((r:any)=>r.arguments?.user_id===userId);
+  if(previous)return commandView(previous); // Never replay an uncertain creation.
+  return bridgeCommand('hardware','set_user',args,{deviceId:device.id},prefix+args.uid);
 }
 export async function sendBridgeWhatsApp(phone:string,message:string,requestId:string=crypto.randomUUID()) {
   if(typeof message!=='string'||!message.trim()||message.length>10000)throw Error('A message of 1–10,000 characters is required');

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/api-auth';
-import { bridgeCommand, bridgeResult, hardwareConfiguration, checkedEnrollmentUser } from '@/lib/bridge';
+import { bridgeCommand, bridgeResult, hardwareConfiguration, checkedEnrollmentUser, prepareEnrollmentUser } from '@/lib/bridge';
 import { serverStore } from '@/lib/services/server-store';
 
 export const runtime = 'nodejs';
@@ -21,12 +21,17 @@ export async function POST(req: NextRequest) {
     if (!student.biometric_id || !/^\d{1,9}$/.test(student.biometric_id)) return NextResponse.json({ error: 'Save the numeric K40 user ID first' }, { status: 400 });
     if (enrollType === 'rfid') return NextResponse.json({ error: 'Enroll the card on the K40, then save its actual card number here. Remote card capture is not exposed by pyzk.' }, { status: 422 });
     const checkId = `enroll-check-${student.id}-${requestId}`;
+    const verifyId = `enroll-verify-${student.id}-${requestId}`;
+    if(action === 'prepare') {
+      const creationCommand = await prepareEnrollmentUser(checkId, student.biometric_id, student.full_name);
+      return NextResponse.json({creationCommand}, {status:202});
+    }
     if(action !== 'capture') {
-      const checkCommand = await bridgeCommand('hardware', 'get_identity_inventory', {}, {deviceId}, checkId);
+      const checkCommand = await bridgeCommand('hardware', 'get_identity_inventory', {}, {deviceId}, action==='verify'?verifyId:checkId);
       return NextResponse.json({checkCommand, message:'Checking the saved K40 user ID before fingerprint capture.'}, {status:202});
     }
     // The web application owns enrollment decisions; the bridge runs raw commands.
-    const uid = await checkedEnrollmentUser(checkId, student.biometric_id);
+    const uid = await checkedEnrollmentUser(verifyId, student.biometric_id);
     const id = `enroll-${student.id}-${requestId}`;
     const command = await bridgeCommand('hardware', 'enroll_user', { uid, user_id: student.biometric_id, temp_id: 0 }, { deviceId }, id);
     return NextResponse.json({ success: command.state === 'succeeded', pending: ['queued','running'].includes(command.state), commandId: id, state: command.state,

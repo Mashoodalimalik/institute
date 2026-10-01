@@ -5,6 +5,7 @@ import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
 import { demoStore } from '@/lib/services/store';
 import { Profile } from '@/lib/types';
+import { enrollStudentFingerprint } from '@/lib/client-enrollment';
 import {
   UserPlus,
   Users,
@@ -144,31 +145,9 @@ export default function AdmissionsPage() {
     setScanStatus('waiting');
     setScanMsg('Sending fingerprint enrollment command to ZKTeco K40 scanner…');
     try {
-      const resp = await fetch('/api/zkt/enroll', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: enrolledStudentId, enrollType: 'fingerprint', requestId: crypto.randomUUID() }),
-      });
-      const data = await resp.json();
-      if (data.pending || data.success) {
-        setScanMsg(data.message || 'Follow the K40 prompts to place your finger…');
-        if (data.pending) {
-          const deadline = Date.now() + 60000;
-          let complete = false;
-          while (Date.now() < deadline) {
-            await new Promise(r => setTimeout(r, 1000));
-            const check = await fetch(`/api/zkt/enroll?commandId=${encodeURIComponent(data.commandId)}`);
-            const result = await check.json();
-            if (!check.ok) throw new Error(result.error);
-            if (result.state === 'succeeded') { setScanStatus('success'); setScanMsg('✅ Fingerprint enrolled and verified on the K40 scanner!'); complete = true; break; }
-            if (!['queued', 'running'].includes(result.state)) throw new Error(result.error?.message || `Enrollment ${result.state}. Try again.`);
-          }
-          if (!complete) throw new Error('Enrollment timed out. Try again when the K40 is available.');
-        } else setScanStatus('success');
-      } else {
-        setScanStatus('error');
-        setScanMsg(data.error || 'Could not contact K40 scanner. Ensure the bridge is running.');
-      }
+      await enrollStudentFingerprint(enrolledStudentId, 'fingerprint', setScanMsg);
+      setScanStatus('success');
+      setScanMsg('Fingerprint enrolled and verified on the K40 scanner!');
     } catch (err: any) {
       setScanStatus('error');
       setScanMsg(err.message || 'Scanner not reachable');
@@ -360,7 +339,7 @@ export default function AdmissionsPage() {
                   {/* Fingerprint Scan Button — appears after student is saved */}
                   {enrolledStudentId && (
                     <div className="pt-3 border-t border-white/[0.06] space-y-3">
-                      <p className="text-xs text-slate-400">Student saved. You can now enroll their fingerprint on the K40 biometric scanner.</p>
+                      <p className="text-xs text-slate-400">Student saved. Scan Fingerprint creates a missing K40 user using the saved numeric ID, verifies the record, then starts fingerprint capture.</p>
                       <button
                         type="button"
                         onClick={handleScanFingerprint}

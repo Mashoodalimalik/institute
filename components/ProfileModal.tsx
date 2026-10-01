@@ -11,7 +11,7 @@ import { Profile, AttendanceRecord, Receipt, PaymentMethod, PAYMENT_METHODS } fr
 import { demoStore } from '@/lib/services/store';
 import { useAuth } from '@/lib/auth-context';
 import SendMessageModal from '@/components/SendMessageModal';
-import { cloudRequest, waitForCommand } from '@/lib/client-bridge';
+import { enrollStudentFingerprint } from '@/lib/client-enrollment';
 
 interface ProfileModalProps {
   studentId: string;
@@ -141,40 +141,9 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
     setEnrollStatus('waiting');
     setEnrollMsg(`Sending ${enrollType} enrollment command to ZKTeco scanner...`);
     try {
-      const requestId = crypto.randomUUID();
-      setEnrollMsg('Checking the saved user ID on the K40...');
-      const prepared = await cloudRequest('/api/zkt/enroll', {studentId:student.id,enrollType,requestId,action:'check'});
-      await waitForCommand(prepared.checkCommand, 60000);
-      const resp = await fetch('/api/zkt/enroll', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          studentId: student.id,
-          enrollType,
-          requestId,
-          action: 'capture',
-        }),
-      });
-      const data = await resp.json();
-      if (data.success || data.pending) {
-        setEnrollMsg(data.message);
-        if (data.pending) {
-          const deadline = Date.now() + 60000;
-          let complete = false;
-          while (Date.now() < deadline) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const response = await fetch(`/api/zkt/enroll?commandId=${encodeURIComponent(data.commandId)}`);
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error);
-            if (result.state === 'succeeded') { setEnrollStatus('success'); setEnrollMsg('Bridge confirmed enrollment completed.'); complete = true; break; }
-            if (!['queued', 'running'].includes(result.state)) throw new Error(result.error?.message || `Enrollment ${result.state}. Verify the device before retrying.`);
-          }
-          if (!complete) throw new Error(`Enrollment is still pending (${data.commandId}). Check the bridge before retrying.`);
-        } else setEnrollStatus('success');
-      } else {
-        setEnrollStatus('error');
-        setEnrollMsg(data.error || 'Failed to contact scanner');
-      }
+      await enrollStudentFingerprint(student.id, enrollType, setEnrollMsg);
+      setEnrollStatus('success');
+      setEnrollMsg('Fingerprint enrolled and verified on the K40.');
     } catch (err) {
       setEnrollStatus('error');
       setEnrollMsg(err instanceof Error ? err.message : 'Could not reach enrollment API');
@@ -610,7 +579,7 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
                       <Radio size={14} /> ZKTeco Scanner Command
                     </div>
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      First create the user on the K40 and save the same numeric K40 user ID below. For fingerprints, click <strong className="text-white">Send to Scanner</strong> and follow the device prompts. For RFID, enroll the card on the K40 and save its actual card number below.
+                      Save a unique numeric K40 user ID below. For fingerprints, the web app creates a missing device user and verifies it before capture. Click <strong className="text-white">Send to Scanner</strong> and follow the device prompts. For RFID, enroll the card on the K40 and save its actual card number below.
                     </p>
 
                     {/* Enrollment type toggle */}
