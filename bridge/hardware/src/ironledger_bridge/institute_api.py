@@ -13,7 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from .adapters.zk_standalone import ZKStandaloneAdapter
 from .function_catalog import catalog, execute, validate
 
-VERSION = '0.2.1'
+VERSION = '0.2.2'
 
 
 class LocalNetworkCORS(CORSMiddleware):

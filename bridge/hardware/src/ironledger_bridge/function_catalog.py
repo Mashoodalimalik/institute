@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import inspect
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any
 
@@ -137,6 +138,56 @@ def encode(value: Any) -> Any:
     raise ValueError(f"Unsupported result type: {type(value).__name__}")
 
 
+@contextmanager
+def enrollment_session(connection):
+    """Keep pyzk's enrollment setup and capture on the same SDK connection."""
+    failure = None
+    try:
+        # Mirrors pyzk/test_machine.py setup, without deleting any templates.
+        connection.set_sdk_build_1()
+        connection.disable_device()
+        connection.reg_event(0xFFFF)
+        yield
+    except BaseException as error:
+        failure = error
+        raise
+    finally:
+        cleanup_errors = []
+        # pyzk raises its socket timeout to 60s during capture and only resets
+        # it on its normal return path. Restore it before error cleanup too.
+        sock = getattr(connection, '_ZK__sock', None)
+        timeout = getattr(connection, '_ZK__timeout', None)
+        if sock is not None and timeout is not None:
+            try:
+                sock.settimeout(timeout)
+            except Exception as error:
+                cleanup_errors.append(str(error))
+        for method, args in ((connection.reg_event, (0,)), (connection.cancel_capture, ()),
+                             (connection.verify_user, ()), (connection.enable_device, ())):
+            try:
+                method(*args)
+            except Exception as error:
+                cleanup_errors.append(str(error))
+        if cleanup_errors:
+            message = 'Enrollment cleanup was incomplete; check that the K40 is back in attendance mode.'
+            if failure is not None:
+                failure.add_note(message)
+            else:
+                raise RuntimeError(message)
+
+
+def enroll_and_verify(connection, converted):
+    with enrollment_session(connection):
+        acknowledged = FUNCTIONS['enroll_user'](connection, **converted)
+        connection.refresh_data()
+        retained = connection.get_user_template(uid=converted['uid'], user_id=converted['user_id'], temp_id=converted.get('temp_id', 0))
+        if (not isinstance(retained, Finger) or not retained.valid or not retained.template
+                or retained.uid != converted['uid'] or retained.fid != converted.get('temp_id', 0)):
+            transport = 'TCP' if getattr(connection, 'tcp', False) else 'UDP'
+            raise RuntimeError(f"Fingerprint enrollment could not be verified on the K40 ({transport}; capture completed: {bool(acknowledged)}). Check whether the device prompted for scans and saved a fingerprint before retrying.")
+        return {'verifiedByReadBack': True, 'sourceIdentity': f"zk-user:{converted['user_id']}"}
+
+
 def execute(adapter: Any, name: str, arguments: dict, *, preflight=None) -> Any:
     converted = validate(name, arguments)
     if not hasattr(adapter, "_connection"):
@@ -152,8 +203,9 @@ def execute(adapter: Any, name: str, arguments: dict, *, preflight=None) -> Any:
                          if (not uid or u.uid == uid)
                          and (not user_id or str(u.user_id) == user_id)), None) if uid or user_id else None
             if user is None:
-                raise ValueError("K40 user not found. Create the user on the K40 first, then save the same numeric K40 user ID on the student's Enrollment tab.")
+                raise ValueError("K40 user not found. Run user preparation from the web app and verify the saved K40 user ID before capture.")
             converted.update(uid=int(user.uid), user_id=str(user.user_id))
+            return enroll_and_verify(connection, converted)
         if name == "delete_user_template":
             users = connection.get_users()
             user = next((u for u in users if (converted.get("uid") and u.uid == converted["uid"]) or (not converted.get("uid") and str(u.user_id) == str(converted.get("user_id", "")))), None)
@@ -162,15 +214,6 @@ def execute(adapter: Any, name: str, arguments: dict, *, preflight=None) -> Any:
             result = adapter._delete_fingerprint_template(connection, uid=user.uid, device_user_id=str(user.user_id), finger_slot=converted.get("temp_id", 0))
         else:
             result = FUNCTIONS[name](connection, **converted)
-        if name == "enroll_user":
-            connection.refresh_data()
-            retained = connection.get_user_template(uid=converted.get("uid", 0), user_id=converted.get("user_id", ""), temp_id=converted.get("temp_id", 0))
-            # None/False are unsuccessful reads, not Finger objects. A positive
-            # enrollment acknowledgement alone never establishes success.
-            if (not isinstance(retained, Finger) or not retained.valid or not retained.template
-                    or retained.uid != converted["uid"] or retained.fid != converted.get("temp_id", 0)):
-                raise RuntimeError("Fingerprint enrollment could not be verified on the K40. Check the user and fingerprint on the device before retrying.")
-            result = {"verifiedByReadBack": True, "sourceIdentity": f"zk-user:{converted['user_id']}"}
         if name == "read_sizes":
             result = {key: getattr(connection, key, None) for key in
                       ("users", "fingers", "records", "cards", "users_cap", "fingers_cap", "rec_cap", "users_av", "fingers_av", "rec_av")}

@@ -21,8 +21,8 @@ using System.Reflection;
 [assembly: AssemblyTitle("Okasha Bridge")]
 [assembly: AssemblyProduct("Okasha Bridge")]
 [assembly: AssemblyCompany("Okasha Institute")]
-[assembly: AssemblyVersion("0.2.1.0")]
-[assembly: AssemblyFileVersion("0.2.1.0")]
+[assembly: AssemblyVersion("0.2.2.0")]
+[assembly: AssemblyFileVersion("0.2.2.0")]
 '@ | Set-Content -LiteralPath $assembly
   & $csc /nologo /target:winexe /platform:x64 "/out:$payload\OkashaBridge.exe" "/win32icon:$PSScriptRoot\okasha.ico" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll (Join-Path $PSScriptRoot 'OkashaBridgeLauncher.cs') (Join-Path $PSScriptRoot 'BridgeStatusWindow.cs') $assembly
   if($LASTEXITCODE -ne 0){throw 'Tray launcher build failed'}
@@ -35,7 +35,7 @@ using System.Reflection;
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README.txt') -Destination $payload
   # License text only; never package local .env files, databases, tokens or sessions.
   $notices = Join-Path $payload 'THIRD-PARTY-NOTICES.txt'
-  'Okasha Bridge 0.2.1: Python, Node.js, pyzk, FastAPI, uvicorn, Baileys and dependencies.' | Set-Content -LiteralPath $notices
+  'Okasha Bridge 0.2.2: Python, Node.js, pyzk, FastAPI, uvicorn, Baileys and dependencies.' | Set-Content -LiteralPath $notices
   $pythonBase = & $python -c 'import sys; print(sys.base_prefix)'
   Get-Content -LiteralPath (Join-Path $pythonBase 'LICENSE.txt') | Add-Content -LiteralPath $notices
   $nodeVersion = & node --version
@@ -45,7 +45,7 @@ using System.Reflection;
     Get-ChildItem -LiteralPath $base -Recurse -File | Where-Object {$_.Name -match '^(LICENSE|COPYING)(\..*)?$'} | ForEach-Object {Add-Content -LiteralPath $notices -Value ("`n--- " + $_.FullName.Substring($base.Length) + " ---`n");Get-Content -LiteralPath $_.FullName | Add-Content -LiteralPath $notices}
   }
   $nsis = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
-  $setup = Join-Path $output 'OkashaBridgeSetup-0.2.1.exe'
+  $setup = Join-Path $output 'OkashaBridgeSetup-0.2.2.exe'
   & $nsis /V2 "/DPAYLOAD=$payload" "/DSETUP_OUTPUT=$setup" (Join-Path $PSScriptRoot 'OkashaBridgeSetup.nsi')
   if($LASTEXITCODE -ne 0){throw 'Installer build failed'}
   $portable = Join-Path $output 'portable'
@@ -55,7 +55,7 @@ using System.Reflection;
   New-Item -ItemType Directory -Force -Path $downloads | Out-Null
   Copy-Item -LiteralPath $setup -Destination $downloads -Force
   $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-  "$hash  OkashaBridgeSetup-0.2.1.exe" | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt')
-  @{version='0.2.1';setup=$setup;portable=$portable;sha256=$hash;node=$nodeVersion;signing='unsigned'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'build-info.json')
+  "$hash  OkashaBridgeSetup-0.2.2.exe" | Set-Content -LiteralPath (Join-Path $output 'SHA256SUMS.txt')
+  @{version='0.2.2';setup=$setup;portable=$portable;sha256=$hash;node=$nodeVersion;signing='unsigned'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'build-info.json')
   Write-Output "Built $setup"
 } finally {Pop-Location}

@@ -1,6 +1,6 @@
-OKASHA BRIDGE 0.2.1 — WINDOWS x64
+OKASHA BRIDGE 0.2.2 — WINDOWS x64
 
-Run OkashaBridge.exe (or install using OkashaBridgeSetup-0.2.1.exe).
+Run OkashaBridge.exe (or install using OkashaBridgeSetup-0.2.2.exe).
 The tray launcher starts the hardware and WhatsApp adapters. Closing its window keeps them running. Exit from the tray stops both.
 
 Open the deployed institute web app as an administrator. Copy the pairing key from this app's tray menu and paste it into Settings > Connect this PC to the bridge. Allow local network access if prompted.
