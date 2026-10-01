@@ -2,6 +2,7 @@ import 'server-only';
 import { createServiceClient } from '@/lib/supabase/server';
 import { isDeepStrictEqual } from 'node:util';
 import { deviceConfiguration, normalizePhone, sanitizeSession } from './bridge-validation.mjs';
+import { checkedUserFromInventory } from './enrollment-check.mjs';
 
 type Component = 'hardware' | 'whatsapp';
 export type Command = {requestId:string;component:Component;method:string;arguments?:any;target?:any;state:string;result?:any;error?:{message?:string}};
@@ -41,6 +42,11 @@ export async function testHardwareConnection() {
   const commands=[];
   for(const method of ['get_device_name','get_serialnumber'])commands.push(await bridgeCommand('hardware',method,{}, {deviceId:device.id},crypto.randomUUID()));
   return {commands};
+}
+export async function checkedEnrollmentUser(checkId:string,userId:string) {
+  const row=checked(await db().from('bridge_commands').select('*').eq('request_id',checkId).single());
+  const {device}=await bridgeSettings();
+  return checkedUserFromInventory(row,device,userId);
 }
 export async function sendBridgeWhatsApp(phone:string,message:string,requestId:string=crypto.randomUUID()) {
   if(typeof message!=='string'||!message.trim()||message.length>10000)throw Error('A message of 1–10,000 characters is required');

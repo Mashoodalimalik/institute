@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/api-auth';
-import { bridgeCommand, bridgeResult, hardwareConfiguration } from '@/lib/bridge';
+import { bridgeCommand, bridgeResult, hardwareConfiguration, checkedEnrollmentUser } from '@/lib/bridge';
 import { serverStore } from '@/lib/services/server-store';
 
 export const runtime = 'nodejs';
@@ -12,17 +12,23 @@ export async function POST(req: NextRequest) {
   const deviceId = device?.id;
   if (!device?.configured) return NextResponse.json({ error: 'K40 is not configured. Save the student now and enroll when the device is available.' }, { status: 503 });
   try {
-    const { studentId, enrollType, requestId } = await req.json();
+    const { studentId, enrollType, requestId, action } = await req.json();
     if (!studentId || !['fingerprint', 'rfid'].includes(enrollType) || !/^[a-zA-Z0-9_.-]{1,64}$/.test(requestId || '')) {
       return NextResponse.json({ error: 'studentId, enrollType and requestId are required' }, { status: 400 });
     }
     const student = await serverStore.getStudentById(studentId);
     if (!student || student.role !== 'student') return NextResponse.json({ error: 'Student not found' }, { status: 404 });
-    if (!/^\d{1,9}$/.test(student.biometric_id || '')) return NextResponse.json({ error: 'Save the numeric K40 user ID first' }, { status: 400 });
+    if (!student.biometric_id || !/^\d{1,9}$/.test(student.biometric_id)) return NextResponse.json({ error: 'Save the numeric K40 user ID first' }, { status: 400 });
     if (enrollType === 'rfid') return NextResponse.json({ error: 'Enroll the card on the K40, then save its actual card number here. Remote card capture is not exposed by pyzk.' }, { status: 422 });
-    // The user slot must already exist on the device; never overwrite an unknown slot.
+    const checkId = `enroll-check-${student.id}-${requestId}`;
+    if(action !== 'capture') {
+      const checkCommand = await bridgeCommand('hardware', 'get_identity_inventory', {}, {deviceId}, checkId);
+      return NextResponse.json({checkCommand, message:'Checking the saved K40 user ID before fingerprint capture.'}, {status:202});
+    }
+    // The web application owns enrollment decisions; the bridge runs raw commands.
+    const uid = await checkedEnrollmentUser(checkId, student.biometric_id);
     const id = `enroll-${student.id}-${requestId}`;
-    const command = await bridgeCommand('hardware', 'enroll_user', { user_id: student.biometric_id, temp_id: 0 }, { deviceId }, id);
+    const command = await bridgeCommand('hardware', 'enroll_user', { uid, user_id: student.biometric_id, temp_id: 0 }, { deviceId }, id);
     return NextResponse.json({ success: command.state === 'succeeded', pending: ['queued','running'].includes(command.state), commandId: id, state: command.state,
       message: 'Enrollment requested. Follow the K40 prompts; completion must be confirmed by the bridge.' }, { status: 202 });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Enrollment failed' }, { status: 502 }); }

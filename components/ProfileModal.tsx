@@ -11,6 +11,7 @@ import { Profile, AttendanceRecord, Receipt, PaymentMethod, PAYMENT_METHODS } fr
 import { demoStore } from '@/lib/services/store';
 import { useAuth } from '@/lib/auth-context';
 import SendMessageModal from '@/components/SendMessageModal';
+import { cloudRequest, waitForCommand } from '@/lib/client-bridge';
 
 interface ProfileModalProps {
   studentId: string;
@@ -140,13 +141,18 @@ export default function ProfileModal({ studentId, onClose, onFeeCollected }: Pro
     setEnrollStatus('waiting');
     setEnrollMsg(`Sending ${enrollType} enrollment command to ZKTeco scanner...`);
     try {
+      const requestId = crypto.randomUUID();
+      setEnrollMsg('Checking the saved user ID on the K40...');
+      const prepared = await cloudRequest('/api/zkt/enroll', {studentId:student.id,enrollType,requestId,action:'check'});
+      await waitForCommand(prepared.checkCommand, 60000);
       const resp = await fetch('/api/zkt/enroll', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           studentId: student.id,
           enrollType,
-          requestId: crypto.randomUUID(),
+          requestId,
+          action: 'capture',
         }),
       });
       const data = await resp.json();

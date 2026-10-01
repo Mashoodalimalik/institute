@@ -8,6 +8,8 @@ Original work: 24 September 2026 (Pakistan time).
 
 This records the work completed during the Supabase setup, application fixes, local backend implementation and combined bridge packaging. Verification results describe the checks performed during that work; they are not a continuous service-health report.
 
+**Web enrollment preflight — 2 October 2026:** the web application now queues an identity inventory read before fingerprint capture, verifies the student's saved ID against that completed result, and passes the resolved internal UID to the raw enrollment command. Checks are tied to the configured device and expire after one minute. Missing users, administrator IDs and occupied fingerprint slot 0 stop in the web app before capture. This uses commands already available in Bridge 0.2.0; the 0.2.1 installer is optional defensive handling for invalid template responses. Four focused web preflight regression tests pass. Device user creation remains a separate step; this change does not create or overwrite users.
+
 ## 1. Separate Supabase project
 
 - Created and linked the institute's separate Supabase project, **Okasha Institute**, in Singapore.
