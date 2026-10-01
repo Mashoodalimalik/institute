@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/api-auth';
-import { hardwareConfiguration, saveHardwareConfiguration, testHardwareConnection } from '@/lib/bridge';
+import { hardwareConfiguration, saveHardwareConfiguration, testHardwareConnection, hardwareDiagnostics } from '@/lib/bridge';
 
 export const dynamic='force-dynamic';
 const headers={'Cache-Control':'no-store'};
@@ -16,6 +16,7 @@ export async function POST(req:NextRequest) {
   if(!body)return NextResponse.json({error:'JSON required'},{status:400,headers});
   try {
     if(body.action==='test')return NextResponse.json(await testHardwareConnection(),{headers});
+    if(body.action==='diagnose')return NextResponse.json(await hardwareDiagnostics(),{headers});
     if(body.action!=='save')return NextResponse.json({error:'Unknown action'},{status:400,headers});
     return NextResponse.json(await saveHardwareConfiguration(body.config),{headers});
   }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Device operation failed'},{status:502,headers});}

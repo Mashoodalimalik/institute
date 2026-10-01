@@ -44,6 +44,16 @@ export async function testHardwareConnection() {
   for(const method of ['get_device_name','get_serialnumber'])commands.push(await bridgeCommand('hardware',method,{}, {deviceId:device.id},crypto.randomUUID()));
   return {commands};
 }
+export async function hardwareDiagnostics() {
+  const device=await hardwareConfiguration();
+  if(!device.configured)throw Error('Save the K40 IP address first');
+  const commands=[];
+  for(const method of ['get_device_name','get_firmware_version','get_platform','get_extend_fmt',
+    'get_user_extend_fmt','get_compat_old_firmware','get_time','read_sizes']) {
+    commands.push(await bridgeCommand('hardware',method,{}, {deviceId:device.id},crypto.randomUUID()));
+  }
+  return {device,commands};
+}
 export async function checkedEnrollmentUser(checkId:string,userId:string) {
   const row=checked(await db().from('bridge_commands').select('*').eq('request_id',checkId).single());
   const {device}=await bridgeSettings();

@@ -13,6 +13,7 @@ export default function BridgeStatus() {
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [identity,setIdentity]=useState<{model?:string;serialNumber?:string}>();
+  const [diagnostics,setDiagnostics]=useState('');
 
   async function refresh() {
     setError('');
@@ -30,12 +31,22 @@ export default function BridgeStatus() {
 
   useEffect(() => { void refresh(); }, []);
 
-  async function action(kind:'save'|'test') {
+  async function action(kind:'save'|'test'|'diagnose') {
     setBusy(kind);setError('');setNotice('');setIdentity(undefined);
     try {
       const response=await fetch('/api/hardware/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:kind,config:config?{id:config.id,address:config.address.trim(),port:config.port,forceUdp:config.forceUdp,commKey}:undefined})});
       const data=await response.json();if(!response.ok)throw Error(data.error||'Device operation failed');
       if(kind==='save'){setConfig(data);setCommKey('');setNotice('Device settings saved. Test the connection when the K40 is available.');}
+      else if(kind==='diagnose') {
+        setDiagnostics('Reading device information. Keep the operating browser open...');
+        const results=await Promise.all(data.commands.map(async(c:any)=>{
+          try {const result=await waitForCommand(c,240000);return {method:c.method,result:result.result};}
+          catch(e){return {method:c.method,error:e instanceof Error?e.message:'Read failed'};}
+        }));
+        setDiagnostics(JSON.stringify({checkedAt:new Date().toISOString(),bridgeVersion:health?.hardware.version,
+          device:data.device,reads:results},null,2));
+        setNotice('Device diagnostics collected. Any unsuccessful reads are included in the report.');
+      }
       else {const results=await Promise.all(data.commands.map((c:any)=>waitForCommand(c)));setIdentity({model:results[0].result,serialNumber:results[1].result});setNotice('K40 responded successfully.');}
     }catch(e){setError(e instanceof Error?e.message:'Device operation failed');}
     finally{setBusy('');}
@@ -76,7 +87,9 @@ export default function BridgeStatus() {
       <label className="text-sm text-slate-300 flex gap-2 items-center"><input type="checkbox" checked={config.forceUdp} onChange={e=>setConfig({...config,forceUdp:e.target.checked})}/>Use UDP instead of automatic TCP</label>
       <div className="flex flex-wrap gap-2"><button disabled={!!busy} onClick={()=>action('save')} className="btn-primary">{busy==='save'&&<Loader2 size={16} className="animate-spin"/>}Save device settings</button><button disabled={!!busy||!config.configured||!health?.hardware.reachable} onClick={()=>action('test')} className="btn-secondary">{busy==='test'&&<Loader2 size={16} className="animate-spin"/>}Test saved connection</button></div>
       {!config.configured&&<p className="text-xs text-slate-400">K40 is not configured. Saving a student does not require a connected device.</p>}
+      <button disabled={!!busy||!config.configured||!health?.hardware.reachable} onClick={()=>action('diagnose')} className="btn-secondary">{busy==='diagnose'&&<Loader2 size={16}/>}Read device diagnostics</button>
     </>}
+    {diagnostics&&<div className="space-y-2"><p className="text-xs text-slate-400">Read-only device information for troubleshooting enrollment.</p><textarea aria-label="Device diagnostics report" readOnly value={diagnostics} className="input w-full font-mono text-xs" rows={14}/><button disabled={!!busy} className="btn-secondary" onClick={async()=>{try{await navigator.clipboard.writeText(diagnostics);setNotice('Diagnostics copied.');}catch{setError('Select the report text and copy it manually.');}}}>Copy diagnostics</button></div>}
     {identity&&<div className="text-sm text-slate-300"><p>Model: {identity.model||'Not reported'}</p><p>Serial: {identity.serialNumber||'Not reported'}</p></div>}
   </section>;
 }
